@@ -76,10 +76,6 @@ def create_app(test_config=None):
         # load the test config if passed in
         app.config.from_mapping(test_config)
 
-    @app.route('/hello')
-    def hello():
-        return 'Hello, World!'
-
     handle_db(app)
     handle_route(app)
     handle_template_context(app)
@@ -320,6 +316,7 @@ def handle_template_context(app):
             # static_css_common=url_for(STATIC, filename='%s/css/common.css' % VERSION),
             static_css_dropdown=url_for(STATIC, filename='%s/css/dropdown.css' % VERSION),
             static_css_dropdown_mobileui=url_for(STATIC, filename='%s/css/dropdown_mobileui.css' % VERSION),
+            # .css for the icons at the bottom of the dropdown menu
             static_css_icon_upload_icon_right=url_for(STATIC,
                                                       filename='%s/css/icon_upload_icon_right.css' % VERSION),
             static_css_multinode=url_for(STATIC, filename='%s/css/multinode.css' % VERSION),
