@@ -80,9 +80,6 @@
 
     <el-table-column prop="stats" label="Stats" sortable align="center" width="{% if SCRAPYD_SERVERS_AMOUNT > 1 %}105{% else %}65{% endif %}" :sort-method="sortByIndex">
       <template slot-scope="scope">
-        {% if SCRAPYD_SERVERS_AMOUNT > 1 %}
-        <a class="state multinode" :style="{ display: scope.row.pending_display }" :href="scope.row.url_clusterreports">{{ g.multinode|safe }}</a>
-        {% endif %}
         <a :class="scope.row.stats_class" :style="{ display: scope.row.pending_display }" :href="scope.row.url_stats" target="_blank">Stats</a>
       </template>
     </el-table-column>

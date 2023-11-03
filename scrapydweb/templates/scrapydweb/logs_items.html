@@ -54,9 +54,6 @@
     {% if project and spider %}
     <el-table-column prop="stats" label="Stats" sortable width="{% if SCRAPYD_SERVERS_AMOUNT > 1 %}105{% else %}65{% endif %}" align="center">
       <template slot-scope="scope">
-        {% if SCRAPYD_SERVERS_AMOUNT > 1 %}
-        <a class="state multinode" :href="scope.row.url_clusterreports" target="_blank">{{ g.multinode|safe }}</a>
-        {% endif %}
         <a :class="scope.row.stats_class" :href="scope.row.url_stats" target="_blank">Stats</a>
       </template>
     </el-table-column>
