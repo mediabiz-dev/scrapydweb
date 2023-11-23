@@ -4716,11 +4716,10 @@
               preview: "查看图片",
               continue: "继续上传",
             },
-            // to be changed to icons instead of text
             table: {
               emptyText: "empty text",
-              confirmFilter: "confirm filter", 
-              resetFilter: "reset filter",
+              confirmFilter: "confirm", 
+              resetFilter: "reset",
               clearFilter: "clear filter",
               sumText: "sum text",
             },
