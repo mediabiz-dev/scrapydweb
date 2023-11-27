@@ -413,8 +413,8 @@ class JobsView(BaseView):
             if not job['finish']:
                 job['url_multinode_stop'] = url_for('servers', node=self.node, opt='stop', project=job['project'],
                                                     version_job=job['job'])
-                job['url_stop'] = url_for('api', node=self.node, opt='stop', project=job['project'],
-                                          version_spider_job=job['job'])
+                job['url_stop'] = url_for('api', node=self.node, opt='forcestop', project=job['project'], version_spider_job=job['job'])
+
 
     def set_kwargs(self):
         self.kwargs = dict(
