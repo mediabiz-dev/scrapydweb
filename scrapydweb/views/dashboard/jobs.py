@@ -276,9 +276,10 @@ class JobsView(BaseView):
                     country_code = re.search("_(\D{2})_",job["job"]) if job["job"] else None
                     country_code = country_code.group(1) if country_code else ''
                     start_time = datetime.strptime(job["start"], '%Y-%m-%d %H:%M:%S') if job["start"] else None
-                    start_time = start_time.strftime('%Y%m%d-%H') if start_time else ''
+                    start_time = start_time.strftime('%Y%m%d-%H-%M') if start_time else ''
                     filename = job["spider"] + "_" + country_code + "_" + start_time + ".csv"
                     if job['finish']:
+                        filename += ".zip"
                         v ='/items/archive/{}/{}/{}.zip'.format(job["spider"], country_code, filename)
                     else:
                         v = '/items/single_sites/{}'.format(filename)
