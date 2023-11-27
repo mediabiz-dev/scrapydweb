@@ -132,11 +132,14 @@
 </div>
 
 
+<!-- don't autorefresh site -->
+{# 
 <script>
 {% if JOBS_RELOAD_INTERVAL > 0 %}
 setTimeout("if(loading == false){window.location.reload(true);}else{console.log('loading: ' + loading);}", {{ JOBS_RELOAD_INTERVAL * 1000 }});
 {% endif %}
 </script>
+#}
 
 <script>
 // size: — | medium | small | mini
