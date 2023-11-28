@@ -41,7 +41,9 @@
     :max-height="maxHeight"
     style="width: 100%;"
     :size="size"
-    :default-sort="{prop: 'content_type', order: 'ascending'}"
+    <!-- it doesn't make sense to sort based on content_type, because all of it is [application/zip] -->
+    <!-- :default-sort="{prop: 'content_type', order: 'ascending'}" -->
+    :default-sort="{prop: 'filename', order: 'descending'}"
   >
 
     <el-table-column prop="index" label="Index" sortable width="70" align="center"></el-table-column>
