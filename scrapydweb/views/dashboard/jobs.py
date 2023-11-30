@@ -279,7 +279,6 @@ class JobsView(BaseView):
                     start_time = start_time.strftime('%Y%m%d-%H-%M') if start_time else ''
                     filename = job["spider"] + "_" + country_code + "_" + start_time + ".csv"
                     if job['finish']:
-                        filename += ".zip"
                         v ='/items/archive/{}/{}/{}.zip'.format(job["spider"], country_code, filename)
                     else:
                         v = '/items/single_sites/{}'.format(filename)
