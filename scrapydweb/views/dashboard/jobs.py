@@ -276,7 +276,7 @@ class JobsView(BaseView):
                     country_code = re.search("_(\D{2})_",job["job"]) if job["job"] else None
                     country_code = country_code.group(1) if country_code else ''
                     start_time = datetime.strptime(job["start"], '%Y-%m-%d %H:%M:%S') if job["start"] else None
-                    start_time = start_time.strftime('%Y%m%d-%H') if start_time else ''
+                    start_time = start_time.strftime('%Y%m%d-%H-%M') if start_time else ''
                     filename = job["spider"] + "_" + country_code + "_" + start_time + ".csv"
                     if job['finish']:
                         v ='/items/archive/{}/{}/{}.zip'.format(job["spider"], country_code, filename)
@@ -412,8 +412,8 @@ class JobsView(BaseView):
             if not job['finish']:
                 job['url_multinode_stop'] = url_for('servers', node=self.node, opt='stop', project=job['project'],
                                                     version_job=job['job'])
-                job['url_stop'] = url_for('api', node=self.node, opt='stop', project=job['project'],
-                                          version_spider_job=job['job'])
+                job['url_stop'] = url_for('api', node=self.node, opt='forcestop', project=job['project'], version_spider_job=job['job'])
+
 
     def set_kwargs(self):
         self.kwargs = dict(
