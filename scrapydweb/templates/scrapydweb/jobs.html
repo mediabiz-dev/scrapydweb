@@ -59,7 +59,7 @@
     <!-- / — / medium / small / mini -->
     <!-- :default-sort="{prop: 'runtime', order: 'descending'}" -->
 
-    <el-table-column prop="index" label="Index" sortable align="center" width="70"></el-table-column>
+    <el-table-column prop="index" label="Index" sortable align="center" width="50"></el-table-column>
     <!-- 'abcdefghi0abcdefghi0' -->
     <el-table-column prop="project" label="Project" sortable show-overflow-tooltip align="center" width="150">
       <template slot-scope="scope"><span :style="{ color: scope.row.pending_color }">{{scope.row.project}}</span></template>
@@ -78,13 +78,13 @@
       <template slot-scope="scope"><span :class="scope.row.items_class">{{scope.row.items}}</span></template>
     </el-table-column>
 
-    <el-table-column prop="stats" label="Stats" sortable align="center" width="{% if SCRAPYD_SERVERS_AMOUNT > 1 %}105{% else %}65{% endif %}" :sort-method="sortByIndex">
+    <el-table-column prop="stats" label="Stats" sortable align="center" width="{% if SCRAPYD_SERVERS_AMOUNT > 1 %}85{% else %}65{% endif %}" :sort-method="sortByIndex">
       <template slot-scope="scope">
         <a :class="scope.row.stats_class" :style="{ display: scope.row.pending_display }" :href="scope.row.url_stats" target="_blank">Stats</a>
       </template>
     </el-table-column>
 
-    <el-table-column prop="action" label="Action" sortable align="center" width="{% if SCRAPYD_SERVERS_AMOUNT > 1 %}115{% else %}90{% endif %}" :sort-method="sortByIndex">
+    <el-table-column prop="action" label="Action" sortable align="center" width="{% if SCRAPYD_SERVERS_AMOUNT > 1 %}85{% else %}65{% endif %}" :sort-method="sortByIndex">
       <template slot-scope="scope">
         <span style="color: red;" :style="{ display: scope.row.display_kill }">Kill {{scope.row.pid}}</span>
         <a :class="scope.row.action_class" :style="{ display: scope.row.display_action }" @click="handleActionClick(scope.row.url_action)">{{scope.row.action}}</a>
