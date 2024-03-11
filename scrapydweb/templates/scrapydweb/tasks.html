@@ -431,27 +431,19 @@ var Main = {
     // }
 
     bulkAction(action) {
+        console.log('Initiating bulk action: ' + action);
+
         let selectedRows = vm.$refs.multipleTable.selection;
+        let selectedTaskUrls = selectedRows.map(row => [row.url_status, row.url_recreate, row.url_action, row.url_delete, row.url_fire]).flat();
+        let toFetch = selectedTaskUrls.filter(url => url && url.length > 0 && url.includes(action));
+        console.log('selectedRows:', selectedRows);
+        console.log('selectedTaskUrls:', selectedTaskUrls);
+        console.log('toFetch:', toFetch);
 
-        if ( action === "delete" ) {
-            let deleteUrls = selectedRows.map(row => row.url_delete).filter(url => url && url.length > 0);
-            Promise.all(deleteUrls.map(url => fetch(url, { method: 'DELETE' }))).then(responses => {
-                // TODO: check response of each delete request
-                // TODO: should we reload the page each time?
+        Promise.all(toFetch.map(url => fetch(url))).then(responses => {
+            if (responses.length > 0)
                 window.location.reload();
-            });
-        } else {
-
-            // other actions handled as before (default?)
-
-            let selectedTaskUrls = selectedRows.map(row => [row.url_status, row.url_recreate, row.url_action, row.url_delete, row.url_fire]).flat();
-            let toFetch = selectedTaskUrls.filter(url => url && url.length > 0 && url.includes(action));
-
-            Promise.all(toFetch.map(url => fetch(url))).then(responses => {
-                if (responses.length > 0)
-                    window.location.reload();
-            });
-        }
+        });
     }
 
   }
