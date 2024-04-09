@@ -4,6 +4,8 @@ import re
 from collections import namedtuple
 from typing import List, Sequence
 
+scrapydweb_logger = logging.getLogger('scrapydweb')
+
 SCRAPYD_SERVER_PATTERN = re.compile(r"""
                                         ^
                                         (?:
@@ -52,7 +54,7 @@ def find_by_name(servers: List[ScrapydServer], name: str) -> int:
 
 
 def names_to_nodes(servers: List[ScrapydServer], node_names: List[str]) -> List[int]:
-    logger.debug(f"[names_to_nodes] Finding nodes: {node_names}")
+    scrapydweb_logger.debug(f"[names_to_nodes] Finding nodes: {node_names}")
     return [find_by_name(servers, name) for name in node_names]
 
 
