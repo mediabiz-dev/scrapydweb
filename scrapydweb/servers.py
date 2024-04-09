@@ -62,6 +62,7 @@ def find_by_name(servers: List[ScrapydServer], name: str) -> int:
 
 def names_to_nodes(servers: List[ScrapydServer], node_names: List[str]) -> List[int]:
     print(f"[names_to_nodes] Finding nodes: {node_names}") # changed this to see if it outputs it to log
+    logger.info(f"[names_to_nodes] Finding nodes: {node_names}") 
     return [find_by_name(servers, name) for name in node_names]
 
 
