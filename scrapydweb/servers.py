@@ -5,6 +5,7 @@ from collections import namedtuple
 from typing import List, Sequence
 
 scrapydweb_logger = logging.getLogger('scrapydweb')
+scrapydweb_logger.setLevel(logging.DEBUG)
 
 SCRAPYD_SERVER_PATTERN = re.compile(r"""
                                         ^
