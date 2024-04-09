@@ -62,6 +62,11 @@ dictConfig({
             'level': 'WARNING',
             'propagate': False,
         },
+       'apscheduler': {  
+            'level': 'DEBUG',  
+            'handlers': ['wsgi', 'file'],  
+            'propagate': False,  
+        },
     },
     'root': {
         'level': 'DEBUG',
