@@ -73,7 +73,7 @@ dictConfig({
 # https://docs.sqlalchemy.org/en/latest/core/engines.html#configuring-logging
 # https://apscheduler.readthedocs.io/en/latest/userguide.html#troubleshooting
 # logging.basicConfig()
-# logging.getLogger('apscheduler').setLevel(logging.DEBUG)
+logging.getLogger('apscheduler').setLevel(logging.DEBUG)
 # logging.getLogger('sqlalchemy.engine').setLevel(logging.DEBUG)
 
 
