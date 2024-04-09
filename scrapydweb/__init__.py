@@ -24,61 +24,77 @@ logging.getLogger('sqlalchemy.engine.Engine').propagate = False
 logging.getLogger('sqlalchemy.engine.Engine').setLevel(logging.WARNING)
 # http://flask.pocoo.org/docs/1.0/logging/#basic-configuration
 
-# TODO: REMOVE LOGGING WHEN DONE TESTING OTHERWISE THE LOG WILL GROW
 dictConfig({
     'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'default': {
-            'format': '[%(asctime)s] %(levelname)-8s in %(name)s: %(message)s',
-        },
-    },
-    'handlers': {
-        'wsgi': {
-            'class': 'logging.StreamHandler',
-            'stream': 'ext://flask.logging.wsgi_errors_stream',
-            'formatter': 'default'
-        },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': 'scrapydweb_init.log',
-            'formatter': 'default',
-            'level': 'DEBUG',
-        },
-        'scrapydweb_file': {  
-            'class': 'logging.FileHandler',
-            'filename': '/scrapydweb_data/logs/scrapydweb.log',
-            'formatter': 'default',
-            'level': 'DEBUG',
-        },
-    },
-    'loggers': {
-        'scrapydweb_servers.log': {  
-            'handlers': ['scrapydweb_file'],
-            'level': 'DEBUG',
-            'propagate': False,  
-        },
-        'sqlalchemy.engine.Engine': {  
-            'level': 'WARNING',
-            'propagate': False,
-        },
-       'apscheduler': {  
-            'level': 'DEBUG',  
-            'handlers': ['wsgi', 'file'],  
-            'propagate': False,  
-        },
-    },
+    'formatters': {'default': {
+        'format': '[%(asctime)s] %(levelname)-8s in %(name)s: %(message)s',
+    }},
+    'handlers': {'wsgi': {
+        'class': 'logging.StreamHandler',
+        'stream': 'ext://flask.logging.wsgi_errors_stream',
+        'formatter': 'default'
+    }},
     'root': {
         'level': 'DEBUG',
-        'handlers': ['wsgi', 'file']
+        'handlers': ['wsgi']
     }
 })
+
+# TODO: REMOVE LOGGING WHEN DONE TESTING OTHERWISE THE LOG WILL GROW
+# dictConfig({
+#     'version': 1,
+#     'disable_existing_loggers': False,
+#     'formatters': {
+#         'default': {
+#             'format': '[%(asctime)s] %(levelname)-8s in %(name)s: %(message)s',
+#         },
+#     },
+#     'handlers': {
+#         'wsgi': {
+#             'class': 'logging.StreamHandler',
+#             'stream': 'ext://flask.logging.wsgi_errors_stream',
+#             'formatter': 'default'
+#         },
+#         'file': {
+#             'class': 'logging.FileHandler',
+#             'filename': 'scrapydweb_init.log',
+#             'formatter': 'default',
+#             'level': 'DEBUG',
+#         },
+#         'scrapydweb_file': {  
+#             'class': 'logging.FileHandler',
+#             'filename': '/scrapydweb_data/logs/scrapydweb.log',
+#             'formatter': 'default',
+#             'level': 'DEBUG',
+#         },
+#     },
+#     'loggers': {
+#         'scrapydweb_servers.log': {  
+#             'handlers': ['scrapydweb_file'],
+#             'level': 'DEBUG',
+#             'propagate': False,  
+#         },
+#         'sqlalchemy.engine.Engine': {  
+#             'level': 'WARNING',
+#             'propagate': False,
+#         },
+#        'apscheduler': {  
+#             'level': 'DEBUG',  
+#             'handlers': ['wsgi', 'file'],  
+#             'propagate': False,  
+#         },
+#     },
+#     'root': {
+#         'level': 'DEBUG',
+#         'handlers': ['wsgi', 'file']
+#     }
+# })
 
 # Comment out the dictConfig above first
 # https://docs.sqlalchemy.org/en/latest/core/engines.html#configuring-logging
 # https://apscheduler.readthedocs.io/en/latest/userguide.html#troubleshooting
 # logging.basicConfig()
-logging.getLogger('apscheduler').setLevel(logging.DEBUG)
+# logging.getLogger('apscheduler').setLevel(logging.DEBUG)
 # logging.getLogger('sqlalchemy.engine').setLevel(logging.DEBUG)
 
 
