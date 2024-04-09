@@ -5,7 +5,13 @@ from collections import namedtuple
 from typing import List, Sequence
 
 scrapydweb_logger = logging.getLogger('scrapydweb_servers.log')
-scrapydweb_logger.setLevel(logging.DEBUG)
+file_handler = logging.FileHandler('scrapydweb.log')
+file_handler.setLevel(logging.DEBUG)  # Set the desired logging level
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+
+# Add the file handler to the logger
+scrapydweb_logger.addHandler(file_handler)
 
 SCRAPYD_SERVER_PATTERN = re.compile(r"""
                                         ^
