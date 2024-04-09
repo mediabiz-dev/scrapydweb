@@ -98,6 +98,7 @@ class ScheduleView(BaseView):
         self.spider = task.spider
 
         self.selected_nodes = names_to_nodes(self.SCRAPYD_SERVER_OBJECTS, json.loads(task.selected_node_names))
+        self.logger.debug("[schedule.py] Selected nodes: %s", self.selected_nodes)
         self.first_selected_node = self.selected_nodes[0]
 
         # 'settings_arguments': {'arg1': '233', 'setting': ['CLOSESPIDER_PAGECOUNT=10',]}
