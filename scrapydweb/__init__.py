@@ -23,9 +23,10 @@ from .vars import PYTHON_VERSION, SQLALCHEMY_BINDS, SQLALCHEMY_DATABASE_URI
 logging.getLogger('sqlalchemy.engine.Engine').propagate = False
 logging.getLogger('sqlalchemy.engine.Engine').setLevel(logging.WARNING)
 # http://flask.pocoo.org/docs/1.0/logging/#basic-configuration
+
 dictConfig({
     'version': 1,
-    'disable_existing_loggers': False,  
+    'disable_existing_loggers': False,
     'formatters': {
         'default': {
             'format': '[%(asctime)s] %(levelname)-8s in %(name)s: %(message)s',
@@ -37,16 +38,33 @@ dictConfig({
             'stream': 'ext://flask.logging.wsgi_errors_stream',
             'formatter': 'default'
         },
-        'file': {  
+        'file': {
             'class': 'logging.FileHandler',
             'filename': 'scrapydweb_init.log',
             'formatter': 'default',
             'level': 'DEBUG',
         },
+        'scrapydweb_file': {  
+            'class': 'logging.FileHandler',
+            'filename': '/scrapydweb_data/logs/scrapydweb.log',
+            'formatter': 'default',
+            'level': 'DEBUG',
+        },
+    },
+    'loggers': {
+        'scrapydweb_servers.log': {  
+            'handlers': ['scrapydweb_file'],
+            'level': 'DEBUG',
+            'propagate': False,  
+        },
+        'sqlalchemy.engine.Engine': {  
+            'level': 'WARNING',
+            'propagate': False,
+        },
     },
     'root': {
         'level': 'DEBUG',
-        'handlers': ['wsgi', 'file']  
+        'handlers': ['wsgi', 'file']
     }
 })
 

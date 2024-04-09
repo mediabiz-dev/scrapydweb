@@ -1,53 +1,8 @@
 import dataclasses
 import logging
-from logging.config import dictConfig
 import re
 from collections import namedtuple
 from typing import List, Sequence
-
-dictConfig({
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'default': {
-            'format': '[%(asctime)s] %(levelname)-8s in %(name)s: %(message)s',
-        },
-    },
-    'handlers': {
-        'wsgi': {
-            'class': 'logging.StreamHandler',
-            'stream': 'ext://flask.logging.wsgi_errors_stream',
-            'formatter': 'default'
-        },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': 'scrapydweb_init.log',
-            'formatter': 'default',
-            'level': 'DEBUG',
-        },
-        'scrapydweb_file': {  
-            'class': 'logging.FileHandler',
-            'filename': '/scrapydweb_data/logs/scrapydweb.log',
-            'formatter': 'default',
-            'level': 'DEBUG',
-        },
-    },
-    'loggers': {
-        'scrapydweb_servers.log': {  
-            'handlers': ['scrapydweb_file'],
-            'level': 'DEBUG',
-            'propagate': False,  
-        },
-        'sqlalchemy.engine.Engine': {  
-            'level': 'WARNING',
-            'propagate': False,
-        },
-    },
-    'root': {
-        'level': 'DEBUG',
-        'handlers': ['wsgi', 'file']
-    }
-})
 
 logger = logging.getLogger('scrapydweb_servers.log')
 
