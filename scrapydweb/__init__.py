@@ -25,17 +25,28 @@ logging.getLogger('sqlalchemy.engine.Engine').setLevel(logging.WARNING)
 # http://flask.pocoo.org/docs/1.0/logging/#basic-configuration
 dictConfig({
     'version': 1,
-    'formatters': {'default': {
-        'format': '[%(asctime)s] %(levelname)-8s in %(name)s: %(message)s',
-    }},
-    'handlers': {'wsgi': {
-        'class': 'logging.StreamHandler',
-        'stream': 'ext://flask.logging.wsgi_errors_stream',
-        'formatter': 'default'
-    }},
+    'disable_existing_loggers': False,  
+    'formatters': {
+        'default': {
+            'format': '[%(asctime)s] %(levelname)-8s in %(name)s: %(message)s',
+        },
+    },
+    'handlers': {
+        'wsgi': {
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://flask.logging.wsgi_errors_stream',
+            'formatter': 'default'
+        },
+        'file': {  
+            'class': 'logging.FileHandler',
+            'filename': 'scrapydweb_init.log',
+            'formatter': 'default',
+            'level': 'DEBUG',
+        },
+    },
     'root': {
         'level': 'DEBUG',
-        'handlers': ['wsgi']
+        'handlers': ['wsgi', 'file']  
     }
 })
 
@@ -45,7 +56,6 @@ dictConfig({
 # logging.basicConfig()
 # logging.getLogger('apscheduler').setLevel(logging.DEBUG)
 # logging.getLogger('sqlalchemy.engine').setLevel(logging.DEBUG)
-logging.basicConfig(filename='scrapydweb_init.log', level=logging.DEBUG)
 
 
 def internal_server_error(error):
