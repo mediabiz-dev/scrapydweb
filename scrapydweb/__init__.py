@@ -24,6 +24,7 @@ logging.getLogger('sqlalchemy.engine.Engine').propagate = False
 logging.getLogger('sqlalchemy.engine.Engine').setLevel(logging.WARNING)
 # http://flask.pocoo.org/docs/1.0/logging/#basic-configuration
 
+# TODO: REMOVE LOGGING WHEN DONE TESTING OTHERWISE THE LOG WILL GROW
 dictConfig({
     'version': 1,
     'disable_existing_loggers': False,
