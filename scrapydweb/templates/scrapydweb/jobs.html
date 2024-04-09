@@ -296,7 +296,6 @@ var Main = {
       return (parseInt(a.pid) || 0) > (parseInt(b.pid) || 0) ? 1 : -1;
     },
     updateStats:function(url) {
-    console.log("HELLO, WORLD!");
       var req = new XMLHttpRequest();
       req.onreadystatechange = function() {
         if (this.readyState == 4) {
