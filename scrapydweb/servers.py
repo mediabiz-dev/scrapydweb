@@ -1,20 +1,55 @@
 import dataclasses
 import logging
+from logging.config import dictConfig
 import re
 from collections import namedtuple
 from typing import List, Sequence
 
-log_file_path = '/scrapydweb_data/logs/scrapydweb.log'  
+dictConfig({
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'default': {
+            'format': '[%(asctime)s] %(levelname)-8s in %(name)s: %(message)s',
+        },
+    },
+    'handlers': {
+        'wsgi': {
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://flask.logging.wsgi_errors_stream',
+            'formatter': 'default'
+        },
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': 'scrapydweb_init.log',
+            'formatter': 'default',
+            'level': 'DEBUG',
+        },
+        'scrapydweb_file': {  
+            'class': 'logging.FileHandler',
+            'filename': '/scrapydweb_data/logs/scrapydweb.log',
+            'formatter': 'default',
+            'level': 'DEBUG',
+        },
+    },
+    'loggers': {
+        'scrapydweb_servers.log': {  
+            'handlers': ['scrapydweb_file'],
+            'level': 'DEBUG',
+            'propagate': False,  
+        },
+        'sqlalchemy.engine.Engine': {  
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
+    'root': {
+        'level': 'DEBUG',
+        'handlers': ['wsgi', 'file']
+    }
+})
+
 logger = logging.getLogger('scrapydweb_servers.log')
-
-logger.setLevel(logging.DEBUG)  
-
-file_handler = logging.FileHandler(log_file_path)  
-file_handler.setLevel(logging.DEBUG)  
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
 
 SCRAPYD_SERVER_PATTERN = re.compile(r"""
                                         ^
@@ -62,7 +97,6 @@ def find_by_name(servers: List[ScrapydServer], name: str) -> int:
 
 
 def names_to_nodes(servers: List[ScrapydServer], node_names: List[str]) -> List[int]:
-    print(f"[names_to_nodes] Finding nodes: {node_names}") # changed this to see if it outputs it to log
     logger.info(f"[names_to_nodes] Finding nodes: {node_names}") 
     return [find_by_name(servers, name) for name in node_names]
 
