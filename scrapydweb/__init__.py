@@ -45,6 +45,7 @@ dictConfig({
 # logging.basicConfig()
 # logging.getLogger('apscheduler').setLevel(logging.DEBUG)
 # logging.getLogger('sqlalchemy.engine').setLevel(logging.DEBUG)
+logging.basicConfig(filename='scrapydweb.log', level=logging.DEBUG)
 
 
 def internal_server_error(error):
