@@ -189,6 +189,7 @@ class BaseView(View):
             self.node = int(self.view_args["node"])
         except ValueError:
             node_id = find_by_name(self.SCRAPYD_SERVER_OBJECTS, self.view_args["node"])
+            self.logger.info("[BaseView] node_id: %s", node_id)
             self.node = node_id
 
         assert 0 < self.node <= self.SCRAPYD_SERVERS_AMOUNT, \
