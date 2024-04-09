@@ -108,7 +108,7 @@ class BaseView(View):
                                        or ALLOWED_SCRAPYD_LOG_EXTENSIONS)
 
         # LogParser
-        self.ENABLE_LOGPARSER = app.config.get('ENABLE_LOGPARSER', True)
+        self.ENABLE_LOGPARSER = app.config.get('ENABLE_LOGPARSER', False)
         self.BACKUP_STATS_JSON_FILE = app.config.get('BACKUP_STATS_JSON_FILE', True)
 
         # Timer Tasks
