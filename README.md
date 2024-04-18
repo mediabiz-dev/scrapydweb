@@ -141,6 +141,7 @@ $ source venv/scrapydweb/bin/activate
 </details>
 
 ## :clipboard: Local Environment
+<details>
 Recommended (and tested) approach to set up the local environment:<br>
 1. Project is slightly outdated so, for best results install Python 3.7 specifically for the project<br>
 2. Make sure exact Python packages are installed from requirements.txt as some are outdated<br>
@@ -162,7 +163,7 @@ Recommended (and tested) approach to set up the local environment:<br>
 7. To see timer tasks locally, use exported CSV from the prod database and import it into <code>task.db</code> SQLite database. Default db table
 is in <code>/root/scrapydweb/scrapydweb/data/database/timer_tasks.db</code>
 8. To run Flask app in debugger/IDE, set <code>FLASK_APP=/root/scrapydweb/scrapydweb/run.py</code>
-
+</details>
 
 ## :clipboard: Changelog
 Detailed changes for each release are documented in the [:link: HISTORY.md](https://github.com/my8100/scrapydweb/blob/master/HISTORY.md).
