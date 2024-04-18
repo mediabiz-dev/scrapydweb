@@ -158,11 +158,11 @@ Recommended (and tested) approach to set up the local environment:<br>
         (USERNAME, PASSWORD),
         'US'
     )
-]</code>
-6. Re-run the project again with <code>scrapydweb</code> it should start server on port 6800
+]</code><br>
+6. Re-run the project again with <code>scrapydweb</code> it should start server on port 6800<br>
 7. To see timer tasks locally, use exported CSV from the prod database and import it into <code>task.db</code> SQLite database. Default db table
-is in <code>/root/scrapydweb/scrapydweb/data/database/timer_tasks.db</code>
-8. To run Flask app in debugger/IDE, set <code>FLASK_APP=/root/scrapydweb/scrapydweb/run.py</code>
+is in <code>/root/scrapydweb/scrapydweb/data/database/timer_tasks.db</code><br>
+8. To run Flask app in debugger/IDE, set <code>FLASK_APP=/root/scrapydweb/scrapydweb/run.py</code><br>
 </details>
 
 ## :clipboard: Changelog
