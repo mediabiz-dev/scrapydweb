@@ -140,6 +140,29 @@ $ source venv/scrapydweb/bin/activate
 
 </details>
 
+## :clipboard: Local Environment
+Recommended (and tested) approach to set up the local environment:<br>
+1. Project is slightly outdated so, for best results install Python 3.7 specifically for the project<br>
+2. Make sure exact Python packages are installed from requirements.txt as some are outdated<br>
+3. FlaskSQlAlchemy package may be incompatible with some other packages, try downgrading<br>
+4. In project root directory run <code>scrapydweb</code> to initiate settings config file<br>
+5. Set <code>DOMAIN</code>, <code>ALL_WORKERS</code> and <code>SCRAPYD_SERVER</code> as:</br>
+<code>DOMAIN = 'smbots-international.com'</code><br>
+<code>ALL_WORKERS = ['US,US-minibots,US-linear,AR,AT,AU,BE,BR,CA,CH,DE,DK,ES,FI,FR,GB,IE,IN,IT,JP,KR,MX,NL,NO,PL,PT,SE,NZ,TR']</code><br>
+<code>SCRAPYD_SERVERS = [
+    ScrapydServer(
+        f"scrapyd-us",
+        f"scrapyd-us.{DOMAIN}",
+        80,
+        (USERNAME, PASSWORD),
+        'US'
+    )
+]</code>
+6. Re-run the project again with <code>scrapydweb</code> it should start server on port 6800
+7. To see timer tasks locally, use exported CSV from the prod database and import it into <code>task.db</code> SQLite database. Default db table
+is in <code>/root/scrapydweb/scrapydweb/data/database/timer_tasks.db</code>
+8. To run Flask app in debugger/IDE, set <code>FLASK_APP=/root/scrapydweb/scrapydweb/run.py</code>
+
 
 ## :clipboard: Changelog
 Detailed changes for each release are documented in the [:link: HISTORY.md](https://github.com/my8100/scrapydweb/blob/master/HISTORY.md).
