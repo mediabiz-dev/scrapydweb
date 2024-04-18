@@ -150,7 +150,8 @@ Recommended (and tested) approach to set up the local environment:<br>
 5. Set <code>DOMAIN</code>, <code>ALL_WORKERS</code> and <code>SCRAPYD_SERVER</code> as:</br>
 <code>DOMAIN = 'smbots-international.com'</code><br>
 <code>ALL_WORKERS = ['US,US-minibots,US-linear,AR,AT,AU,BE,BR,CA,CH,DE,DK,ES,FI,FR,GB,IE,IN,IT,JP,KR,MX,NL,NO,PL,PT,SE,NZ,TR']</code><br>
-<code>SCRAPYD_SERVERS = [
+```
+SCRAPYD_SERVERS = [
     ScrapydServer(
         f"scrapyd-us",
         f"scrapyd-us.{DOMAIN}",
@@ -158,7 +159,9 @@ Recommended (and tested) approach to set up the local environment:<br>
         (USERNAME, PASSWORD),
         'US'
     )
-]</code><br>
+]
+```
+<br>
 6. Re-run the project again with <code>scrapydweb</code> it should start server on port 6800<br>
 7. To see timer tasks locally, use exported CSV from the prod database and import it into <code>task.db</code> SQLite database. Default db table
 is in <code>/root/scrapydweb/scrapydweb/data/database/timer_tasks.db</code><br>
