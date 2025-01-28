@@ -15,9 +15,8 @@ from .__version__ import __url__, __version__
 from .common import handle_metadata
 from .models import Metadata, db
 from .vars import PYTHON_VERSION, SQLALCHEMY_BINDS, SQLALCHEMY_DATABASE_URI
-from flask_caching import Cache
 # from .utils.scheduler import scheduler
-cache = Cache(config={'CACHE_TYPE': 'simple'})
+
 
 # https://stackoverflow.com/questions/18820274/how-to-suppress-sqlalchemy-engine-base-engine-logging-to-stdout
 
@@ -131,8 +130,6 @@ def create_app(test_config=None):
     handle_db(app)
     handle_route(app)
     handle_template_context(app)
-
-    cache.init_app(app)
 
     # @app.errorhandler(404)
     # def handle_error(error):
