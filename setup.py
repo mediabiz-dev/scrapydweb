@@ -31,7 +31,7 @@ setup(
     packages=find_packages(exclude=("tests", )),
     include_package_data=True,
     zip_safe=False,
-    python_requires=">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*",
+    python_requires=">=3.6",
     install_requires=[
         "Werkzeug == 2.0.3",
         "APScheduler >= 3.5.3",  # Aug 15, 2018
@@ -43,7 +43,7 @@ setup(
         "setuptools >= 40.6.3",  # Dec 11, 2018
         "six >= 1.12.0",  # Dec 10, 2018
         "SQLAlchemy == 1.4.49 ",  # Dec 12, 2018
-        "w3lib >= 1.17.0",  # Feb 9, 2017        
+        "w3lib >= 1.17.0",  # Feb 9, 2017
     ],
 
     entry_points={
@@ -54,8 +54,13 @@ setup(
 
     classifiers=[
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
-        "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7"
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
     ]
 )

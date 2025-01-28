@@ -117,38 +117,38 @@ def req(app, client, view='', kws=None, url='', data=None,
             with io.open('%s.html' % save, 'wb') as f:
                 f.write(response.data)
         text = get_text(response)
-        # print(text)
-        js = {}
         try:
             # js = response.get_json()
             js = json.loads(text)
-        except ValueError:  # issubclass(JSONDecodeError, ValueError)
-            pass
-        print("js: %s" % json.dumps(js, sort_keys=True, indent=4, ensure_ascii=False))
+        except (TypeError, ValueError) as err:  # issubclass(JSONDecodeError, ValueError)
+            js = {}
+            print(time.ctime(), 'text not js:', text)
+        else:
+            print(time.ctime(), "js: %s" % json.dumps(js, sort_keys=True, indent=4, ensure_ascii=False))
         try:
             if isinstance(ins, string_types):
                 try:
                     print("ins: %s" % ins)
                 except:  # For compatibility with Win10 Python2
                     print("ins: %s" % repr(ins))
-                assert ins in text
+                assert ins in text, "%s is not found in %s" % (ins, text)
             elif isinstance(ins, list):
                 for i in ins:
                     try:
                         print("ins: %s" % i)
                     except:
                         print("ins: %s" % repr(i))
-                    assert i in text
+                    assert i in text, "%s is not found in %s" % (i, text)
             elif ins:
                 raise TypeError("The argument 'ins' should be either a string or a list")
 
             if isinstance(nos, string_types):
                 print("nos: %s" % nos)
-                assert nos not in text
+                assert nos not in text, "%s is found in %s" % (nos, text)
             elif isinstance(nos, list):
                 for n in nos:
                     print("nos: %s" % n)
-                    assert n not in text
+                    assert n not in text, "%s is found in %s" % (n, text)
             elif nos:
                 raise TypeError("The argument 'nos' should be either a string or a list")
 
@@ -212,6 +212,7 @@ def switch_scrapyd(app):
 
 
 def sleep(seconds=10):
+    print(time.ctime(), "Sleep %ss" % seconds)
     time.sleep(seconds)
 
 
