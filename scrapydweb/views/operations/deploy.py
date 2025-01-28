@@ -19,7 +19,6 @@ from six import text_type
 from six.moves.configparser import Error as ScrapyCfgParseError
 from werkzeug.utils import secure_filename
 
-from ... import cache
 from ...vars import PY2
 from ..baseview import BaseView
 from .scrapyd_deploy import _build_egg, get_config
@@ -53,7 +52,6 @@ class DeployView(BaseView):
         self.modification_times = []
         self.latest_folder = ''
 
-    @cache.cached(timeout=0)
     def dispatch_request(self, **kwargs):
         self.set_scrapy_cfg_list()
         self.project_paths = [os.path.dirname(i) for i in self.scrapy_cfg_list]
