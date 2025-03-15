@@ -1,6 +1,7 @@
 # coding: utf-8
 import argparse
 import logging
+import waitress
 import os
 from shutil import copyfile
 import sys
@@ -93,11 +94,6 @@ def main():
                # "Check out http://flask.pocoo.org/docs/1.0/deploying/")
 
     # http://flask.pocoo.org/docs/1.0/config/?highlight=flask_debug#environment-and-debug-features
-    if app.config.get('DEBUG', False):
-        os.environ['FLASK_DEBUG'] = '1'
-        logger.info("Note that use_reloader is set to False in run.py")
-    else:
-        os.environ['FLASK_DEBUG'] = '0'
 
     # site-packages/flask/app.py
     # Threaded mode is enabled by default.
@@ -114,10 +110,30 @@ def main():
     print("{star}Visit ScrapydWeb at {protocol}://127.0.0.1:{port} "
           "or {protocol}://IP-OF-THE-CURRENT-HOST:{port}{star}\n".format(
            star=STAR, protocol=protocol, port=app.config['SCRAPYDWEB_PORT']))
-    logger.info("For running Flask in production, check out http://flask.pocoo.org/docs/1.0/deploying/")
     apscheduler_logger.setLevel(logging.DEBUG)
-    app.run(host=app.config['SCRAPYDWEB_BIND'], port=app.config['SCRAPYDWEB_PORT'],
-            ssl_context=context, use_reloader=False)
+    # Define optimized parameters
+    if app.config.get('DEBUG', False):
+        os.environ['FLASK_DEBUG'] = '1'
+        logger.info("Note that use_reloader is set to False in run.py")
+        logger.info("For running Flask in production, check out http://flask.pocoo.org/docs/1.0/deploying/")
+        app.run(host=app.config['SCRAPYDWEB_BIND'], port=app.config['SCRAPYDWEB_PORT'],
+                ssl_context=context, use_reloader=False)
+    else:
+        os.environ['FLASK_DEBUG'] = '0'
+        backlog = 2048
+        asyncore_use_poll = True
+        channel_request_lookahead = 10
+        expose_tracebacks = False
+        waitress.serve(
+            app,
+            listen=app.config['SCRAPYDWEB_BIND']+':'+str(app.config['SCRAPYDWEB_PORT']),
+            url_scheme=protocol,
+            ident='ScrapydWeb',
+            backlog=backlog,
+            asyncore_use_poll=asyncore_use_poll,
+            channel_request_lookahead=channel_request_lookahead,
+            expose_tracebacks=expose_tracebacks
+        )
 
 
 def load_custom_settings(config):
