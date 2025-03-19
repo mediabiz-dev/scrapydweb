@@ -121,10 +121,13 @@ def main():
                 ssl_context=context, use_reloader=False)
     else:
         os.environ['FLASK_DEBUG'] = '0'  # Upstream configuration, not changed in fork.
-        # Using Waitress as the production server
-        backlog = 2048  # Maximum number of incoming/waiting requests
-        asyncore_use_poll = True  # Optimization for UNIX systems, ignores file descriptor limits
-        expose_tracebacks = False  # Security: don’t expose tracebacks in production
+                                         # Using Waitress as the production server
+        backlog = 1024                   # Maximum number of incoming/waiting requests
+        asyncore_use_poll = True         # Optimization for UNIX systems, ignores file descriptor limits
+        expose_tracebacks = False        # Security: don’t expose tracebacks in production
+        threads = 12                     # Balance between responsiveness and resource usage
+        channel_timeout = 30             # Close inactive connections after 30 seconds
+        cleanup_interval = 5             # Check for inactive connections every 5 seconds
         waitress.serve(
             app,
             listen=app.config['SCRAPYDWEB_BIND'] + ':' + str(app.config['SCRAPYDWEB_PORT']),
@@ -133,7 +136,9 @@ def main():
             backlog=backlog,
             asyncore_use_poll=asyncore_use_poll,
             expose_tracebacks=expose_tracebacks,
-            connection_limit=1000,
+            channel_timeout=channel_timeout,
+            cleanup_interval= cleanup_interval,
+            threads=threads,
         )
 
 def load_custom_settings(config):
