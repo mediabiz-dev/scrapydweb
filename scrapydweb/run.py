@@ -120,26 +120,21 @@ def main():
         app.run(host=app.config['SCRAPYDWEB_BIND'], port=app.config['SCRAPYDWEB_PORT'],
                 ssl_context=context, use_reloader=False)
     else:
-        os.environ['FLASK_DEBUG'] = '0' # <- Upstream configuration, not changed in fork.
-        # Using https://docs.pylonsproject.org/projects/waitress/en/latest/index.html as prod. server
-        # All the arguments to serve: https://docs.pylonsproject.org/projects/waitress/en/latest/arguments.html
-        backlog = 2048 # The maximum number of incoming/waiting requests - if more than 'backlog' waitress will either retry them at a later point or respond with ECONNREFUSED (depending on proto spec)
-        asyncore_use_poll = True # Slight optimization, should be a bit better on *UNIX systems - Ignores file descriptor limits (1024 when false)
-        channel_request_lookahead = 10 # Read up to 10 requests ahead from the socket
-        expose_tracebacks = False # Don't expose tracebacks in prod.
-        # url_scheme = HTTP or HTTPS, waitress can also look at X-FORWARDED-PROTO reverse proxy header and change this protocol on the fly if configured (atm it's not and not needed)
-        # ident = Sets the 'server' response header - > Use some ambiguous name like 'ScrapydWeb' - Security consideration
+        os.environ['FLASK_DEBUG'] = '0'  # Upstream configuration, not changed in fork.
+        # Using Waitress as the production server
+        backlog = 2048  # Maximum number of incoming/waiting requests
+        asyncore_use_poll = True  # Optimization for UNIX systems, ignores file descriptor limits
+        expose_tracebacks = False  # Security: don’t expose tracebacks in production
         waitress.serve(
             app,
-            listen=app.config['SCRAPYDWEB_BIND']+':'+str(app.config['SCRAPYDWEB_PORT']),
+            listen=app.config['SCRAPYDWEB_BIND'] + ':' + str(app.config['SCRAPYDWEB_PORT']),
             url_scheme=protocol,
             ident='ScrapydWeb',
             backlog=backlog,
             asyncore_use_poll=asyncore_use_poll,
-            channel_request_lookahead=channel_request_lookahead,
-            expose_tracebacks=expose_tracebacks
+            expose_tracebacks=expose_tracebacks,
+            connection_limit=1000,
         )
-
 
 def load_custom_settings(config):
     path = find_scrapydweb_settings_py(SCRAPYDWEB_SETTINGS_PY, os.getcwd())
