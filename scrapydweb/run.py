@@ -1,6 +1,7 @@
 # coding: utf-8
 import argparse
 import logging
+import waitress
 import os
 from shutil import copyfile
 import sys
@@ -93,11 +94,6 @@ def main():
                # "Check out http://flask.pocoo.org/docs/1.0/deploying/")
 
     # http://flask.pocoo.org/docs/1.0/config/?highlight=flask_debug#environment-and-debug-features
-    if app.config.get('DEBUG', False):
-        os.environ['FLASK_DEBUG'] = '1'
-        logger.info("Note that use_reloader is set to False in run.py")
-    else:
-        os.environ['FLASK_DEBUG'] = '0'
 
     # site-packages/flask/app.py
     # Threaded mode is enabled by default.
@@ -114,10 +110,35 @@ def main():
     print("{star}Visit ScrapydWeb at {protocol}://127.0.0.1:{port} "
           "or {protocol}://IP-OF-THE-CURRENT-HOST:{port}{star}\n".format(
            star=STAR, protocol=protocol, port=app.config['SCRAPYDWEB_PORT']))
-    logger.info("For running Flask in production, check out http://flask.pocoo.org/docs/1.0/deploying/")
     apscheduler_logger.setLevel(logging.DEBUG)
-    app.run(host=app.config['SCRAPYDWEB_BIND'], port=app.config['SCRAPYDWEB_PORT'],
-            ssl_context=context, use_reloader=False)
+    # Define optimized parameters
+    if app.config.get('DEBUG', False):
+        os.environ['FLASK_DEBUG'] = '1'
+        logger.info("Note that use_reloader is set to False in run.py")
+        logger.info("For running Flask in production, check out http://flask.pocoo.org/docs/1.0/deploying/")
+        logger.info("Waitress is already installed anc configured - Please set 'DEBUG = False' in 'scrapydweb_settings_v10.py' to serve via Waitress in production")
+        app.run(host=app.config['SCRAPYDWEB_BIND'], port=app.config['SCRAPYDWEB_PORT'],
+                ssl_context=context, use_reloader=False)
+    else:
+        os.environ['FLASK_DEBUG'] = '0' # <- Upstream configuration, not changed in fork.
+        # Using https://docs.pylonsproject.org/projects/waitress/en/latest/index.html as prod. server
+        # All the arguments to serve: https://docs.pylonsproject.org/projects/waitress/en/latest/arguments.html
+        backlog = 2048 # The maximum number of incoming/waiting requests - if more than 'backlog' waitress will either retry them at a later point or respond with ECONNREFUSED (depending on proto spec)
+        asyncore_use_poll = True # Slight optimization, should be a bit better on *UNIX systems - Ignores file descriptor limits (1024 when false)
+        channel_request_lookahead = 10 # Read up to 10 requests ahead from the socket
+        expose_tracebacks = False # Don't expose tracebacks in prod.
+        # url_scheme = HTTP or HTTPS, waitress can also look at X-FORWARDED-PROTO reverse proxy header and change this protocol on the fly if configured (atm it's not and not needed)
+        # ident = Sets the 'server' response header - > Use some ambiguous name like 'ScrapydWeb' - Security consideration
+        waitress.serve(
+            app,
+            listen=app.config['SCRAPYDWEB_BIND']+':'+str(app.config['SCRAPYDWEB_PORT']),
+            url_scheme=protocol,
+            ident='ScrapydWeb',
+            backlog=backlog,
+            asyncore_use_poll=asyncore_use_poll,
+            channel_request_lookahead=channel_request_lookahead,
+            expose_tracebacks=expose_tracebacks
+        )
 
 
 def load_custom_settings(config):

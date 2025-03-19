@@ -159,7 +159,7 @@ def handle_db(app):
     app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
     app.config['SQLALCHEMY_BINDS'] = SQLALCHEMY_BINDS
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # https://stackoverflow.com/a/33790196/10517783
-    app.config['SQLALCHEMY_ECHO'] = True  # http://flask-sqlalchemy.pocoo.org/2.3/config/
+    app.config['SQLALCHEMY_ECHO'] = False  # http://flask-sqlalchemy.pocoo.org/2.3/config/
 
     # flask_sqlalchemy/__init__.py
     # class SQLAlchemy(object):
