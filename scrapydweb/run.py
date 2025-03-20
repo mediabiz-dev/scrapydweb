@@ -114,32 +114,35 @@ def main():
     # Define optimized parameters
     if app.config.get('DEBUG', False):
         os.environ['FLASK_DEBUG'] = '1'
-        logger.info("Note that use_reloader is set to False in run.py")
-        logger.info("For running Flask in production, check out http://flask.pocoo.org/docs/1.0/deploying/")
-        logger.info("Waitress is already installed anc configured - Please set 'DEBUG = False' in 'scrapydweb_settings_v10.py' to serve via Waitress in production")
-        app.run(host=app.config['SCRAPYDWEB_BIND'], port=app.config['SCRAPYDWEB_PORT'],
-                ssl_context=context, use_reloader=False)
+        # logger.info("Waitress is already installed anc configured - Please set 'DEBUG = False' in 'scrapydweb_settings_v10.py' to serve via Waitress in production")
+
     else:
         os.environ['FLASK_DEBUG'] = '0'  # Upstream configuration, not changed in fork.
-                                         # Using Waitress as the production server
-        backlog = 1024                   # Maximum number of incoming/waiting requests
-        asyncore_use_poll = True         # Optimization for UNIX systems, ignores file descriptor limits
-        expose_tracebacks = False        # Security: don’t expose tracebacks in production
-        threads = 12                     # Balance between responsiveness and resource usage
-        channel_timeout = 30             # Close inactive connections after 30 seconds
-        cleanup_interval = 5             # Check for inactive connections every 5 seconds
-        waitress.serve(
-            app,
-            listen=app.config['SCRAPYDWEB_BIND'] + ':' + str(app.config['SCRAPYDWEB_PORT']),
-            url_scheme=protocol,
-            ident='ScrapydWeb',
-            backlog=backlog,
-            asyncore_use_poll=asyncore_use_poll,
-            expose_tracebacks=expose_tracebacks,
-            channel_timeout=channel_timeout,
-            cleanup_interval= cleanup_interval,
-            threads=threads,
-        )
+        # LOWEST PRIORITY TODO: Figure out why this is behaving so strangely... "in waitress: total open connections reached the connection limit, no longer accepting new connections" - Seems like it never reuses a TCP connection but not sure why
+
+        #                                  # Using Waitress as the production server
+        # backlog = 1024                   # Maximum number of incoming/waiting requests
+        # asyncore_use_poll = True         # Optimization for UNIX systems, ignores file descriptor limits
+        # expose_tracebacks = False        # Security: don’t expose tracebacks in production
+        # threads = 12                     # Balance between responsiveness and resource usage
+        # channel_timeout = 30             # Close inactive connections after 30 seconds
+        # cleanup_interval = 5             # Check for inactive connections every 5 seconds
+        # waitress.serve(
+        #     app,
+        #     listen=app.config['SCRAPYDWEB_BIND'] + ':' + str(app.config['SCRAPYDWEB_PORT']),
+        #     url_scheme=protocol,
+        #     ident='ScrapydWeb',
+        #     backlog=backlog,
+        #     asyncore_use_poll=asyncore_use_poll,
+        #     expose_tracebacks=expose_tracebacks,
+        #     channel_timeout=channel_timeout,
+        #     cleanup_interval= cleanup_interval,
+        #     threads=threads,
+        # )
+    logger.info("Note that use_reloader is set to False in run.py")
+    logger.info("For running Flask in production, check out http://flask.pocoo.org/docs/1.0/deploying/")
+    app.run(host=app.config['SCRAPYDWEB_BIND'], port=app.config['SCRAPYDWEB_PORT'],
+            ssl_context=context, use_reloader=False)
 
 def load_custom_settings(config):
     path = find_scrapydweb_settings_py(SCRAPYDWEB_SETTINGS_PY, os.getcwd())
