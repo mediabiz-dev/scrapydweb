@@ -7,7 +7,7 @@ import traceback
 from flask import flash, get_flashed_messages, render_template, request, url_for
 from six.moves.urllib.parse import urljoin
 
-from ...common import handle_metadata
+from ...common import chunks, handle_metadata
 from ...models import create_jobs_table, db
 from ...vars import STRICT_NAME_PATTERN, jobs_table_map
 from ..baseview import BaseView
@@ -249,8 +249,12 @@ class JobsView(BaseView):
 
     def db_insert_jobs(self):
         records = []
+        existing_records = {}
+        for chunk in chunks(set(job['job'] for job in self.jobs)):
+            for record in self.Job.query.filter(self.Job.job.in_(chunk)):
+                existing_records[(record.project, record.spider, record.job)] = record
         for job in self.jobs:  # set(self.jobs): unhashable type: 'dict'
-            record = self.Job.query.filter_by(project=job['project'], spider=job['spider'], job=job['job']).first()
+            record = existing_records.get((job['project'], job['spider'], job['job']))
             if record:
                 self.logger.debug("Found job in database: %s", record)
                 if record.deleted == DELETED:
