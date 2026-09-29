@@ -41,9 +41,12 @@ custom_settings = dict(
     SMTP_CONNECTION_TIMEOUT_=60,
 
     ENABLE_MONITOR=os.environ.get('ENABLE_MONITOR', 'True') == 'True',
-    ENABLE_SLACK_ALERT=os.environ.get('ENABLE_SLACK_ALERT', 'True') == 'True',
-    ENABLE_TELEGRAM_ALERT=os.environ.get('ENABLE_TELEGRAM_ALERT', 'True') == 'True',
-    ENABLE_EMAIL_ALERT=os.environ.get('ENABLE_EMAIL_ALERT', 'True') == 'True',
+    # Each alert is on by default only when its credentials are provided, since check_app_config()
+    # rejects an enabled alert without them; set ENABLE_*_ALERT to override.
+    ENABLE_SLACK_ALERT=os.environ.get('ENABLE_SLACK_ALERT', str(bool(os.environ.get('SLACK_TOKEN')))) == 'True',
+    ENABLE_TELEGRAM_ALERT=os.environ.get(
+        'ENABLE_TELEGRAM_ALERT', str(bool(os.environ.get('TELEGRAM_TOKEN')))) == 'True',
+    ENABLE_EMAIL_ALERT=os.environ.get('ENABLE_EMAIL_ALERT', str(bool(os.environ.get('EMAIL_PASSWORD')))) == 'True',
 )
 
 
@@ -90,15 +93,30 @@ def app():
 
     app = create_app(config)
 
+    # run.py builds SCRAPYD_SERVER_OBJECTS via check_app_config() before serving; the views and
+    # templates index into it, so build it here the same way (auth and group encoded per server).
+    # Imported here: importing check_app_config starts the scheduler, which must happen after
+    # setup_env() has removed the old *.db files.
+    from scrapydweb.utils.check_app_config import check_scrapyd_servers
+    app.config['SCRAPYD_SERVERS'] = [
+        '%s%s%s' % ('%s:%s@' % auth if auth else '', server, '#%s' % group if group else '')
+        for server, auth, group in zip(SCRAPYD_SERVERS, config['SCRAPYD_SERVERS_AUTHS'],
+                                       config['SCRAPYD_SERVERS_GROUPS'])
+    ]
+    check_scrapyd_servers(app.config)
+
+    # Keep in sync with inject_variable() in scrapydweb/run.py
     @app.context_processor
     def inject_variable():
         SCRAPYD_SERVERS = app.config.get('SCRAPYD_SERVERS', []) or ['127.0.0.1:6800']
+        SCRAPYD_SERVERS_PUBLIC_URLS = app.config.get('SCRAPYD_SERVERS_PUBLIC_URLS', None)
         return dict(
             SCRAPYD_SERVERS=SCRAPYD_SERVERS,
+            SCRAPYD_SERVER_OBJECTS=app.config.get('SCRAPYD_SERVER_OBJECTS', []),
             SCRAPYD_SERVERS_AMOUNT=len(SCRAPYD_SERVERS),
             SCRAPYD_SERVERS_GROUPS=app.config.get('SCRAPYD_SERVERS_GROUPS', []) or [''],
             SCRAPYD_SERVERS_AUTHS=app.config.get('SCRAPYD_SERVERS_AUTHS', []) or [None],
-            SCRAPYD_SERVERS_PUBLIC_URLS=[''] * len(SCRAPYD_SERVERS),
+            SCRAPYD_SERVERS_PUBLIC_URLS=SCRAPYD_SERVERS_PUBLIC_URLS or [''] * len(SCRAPYD_SERVERS),
 
             DAEMONSTATUS_REFRESH_INTERVAL=app.config.get('DAEMONSTATUS_REFRESH_INTERVAL', 10),
             ENABLE_AUTH=app.config.get('ENABLE_AUTH', False),

@@ -106,6 +106,9 @@ def req(app, client, view='', kws=None, url='', data=None,
     if single_scrapyd:
         set_single_scrapyd(app, set_to_second)
 
+    if view == 'tasks.xhr' and (kws or {}).get('action') == 'dump':
+        return check_js(dump_task_data(app, kws.get('task_id')), jskws=jskws, jskeys=jskeys)
+
     with app.test_request_context():
         if not url:
             url = url_for(view, **kws)
@@ -192,23 +195,100 @@ def req(app, client, view='', kws=None, url='', data=None,
         return text, js
 
 
+def check_js(js, jskws=None, jskeys=None):
+    print(time.ctime(), "js: %s" % json.dumps(js, sort_keys=True, indent=4, ensure_ascii=False))
+    for k, v in (jskws or {}).items():
+        print("jskws: %s = %s" % (k, v))
+        try:
+            assert js[k] == v
+        except AssertionError:
+            # v is an element of js[k] or a substring of js[k]
+            assert v in js[k]
+    for k in [jskeys] if isinstance(jskeys, string_types) else (jskeys or []):
+        print("jskeys: %s" % k)
+        assert k in js.keys()
+    return json.dumps(js), js
+
+
+# The app's test-only 'tasks.xhr' dump action (TasksXhrView.dump_task_data) still reads the
+# 'selected_nodes' column, renamed to 'selected_node_names' in 77dcc15, so it crashes for any
+# existing task. Build the same payload here from the Task row and its apscheduler job instead,
+# mapping the stored node names back to node numbers like the Run Spider page does.
+def dump_task_data(app, task_id):
+    from scrapydweb.models import Task
+    from scrapydweb.servers import names_to_nodes
+    from scrapydweb.utils.scheduler import scheduler
+
+    js = dict(action='dump', task_id=task_id, task_result_id=None, status=cst.OK)
+    with app.app_context():
+        task = Task.query.get(task_id) if task_id else None
+        apscheduler_job = scheduler.get_job(str(task_id)) if task_id else None
+        if not task:
+            js['status'] = cst.ERROR
+            if apscheduler_job:
+                js['data'] = dict(apscheduler_job=task_id)
+                js['message'] = "apscheduler_job #%s found. " % task_id
+            else:
+                js['data'] = None
+                js['message'] = "apscheduler_job #%s not found. " % task_id
+            js['message'] += "Task #%s not found. " % task_id
+            return js
+        data = dict((k, v) for k, v in vars(task).items() if not k.startswith('_'))
+        data['settings_arguments'] = json.loads(data['settings_arguments'])
+        data['selected_nodes'] = names_to_nodes(app.config['SCRAPYD_SERVER_OBJECTS'],
+                                                json.loads(data.pop('selected_node_names')))
+        data['create_time'] = str(data['create_time'])
+        data['update_time'] = str(data['update_time'])
+        js['data'] = data
+        if not apscheduler_job:
+            data['apscheduler_job'] = None
+            js['tip'] = "apscheduler_job #{id} not found. Task #{id} found. ".format(id=task_id)
+            return js
+        trigger = apscheduler_job.trigger
+        data['apscheduler_job'] = dict(
+            id=apscheduler_job.id,
+            name=apscheduler_job.name,
+            kwargs=apscheduler_job.kwargs,
+            misfire_grace_time=apscheduler_job.misfire_grace_time,
+            coalesce=apscheduler_job.coalesce,
+            max_instances=apscheduler_job.max_instances,
+            next_run_time=str(apscheduler_job.next_run_time) if apscheduler_job.next_run_time else None,
+        )
+        data['apscheduler_job']['trigger'] = dict((f.name, str(f)) for f in trigger.fields)
+        data['apscheduler_job']['trigger'].update(dict(
+            start_date=str(trigger.start_date) if trigger.start_date else None,
+            end_date=str(trigger.end_date) if trigger.end_date else None,
+            timezone=str(trigger.timezone) if trigger.timezone else None,
+            jitter=trigger.jitter,
+        ))
+        js['tip'] = "apscheduler_job #{id} found. Task #{id} found. ".format(id=task_id)
+    return js
+
+
 def req_single_scrapyd(*args, **kwargs):
     kwargs.update(single_scrapyd=True)
     return req(*args, **kwargs)
 
 
+# The views read SCRAPYD_SERVER_OBJECTS (see conftest.py), so keep it in step with the per-server lists
+SERVER_CONFIG_KEYS = ['SCRAPYD_SERVERS', 'SCRAPYD_SERVER_OBJECTS', 'SCRAPYD_SERVERS_AUTHS',
+                      'SCRAPYD_SERVERS_GROUPS', 'SCRAPYD_SERVERS_PUBLIC_URLS']
+
+
 def set_single_scrapyd(app, set_to_second=False):
     if len(app.config['SCRAPYD_SERVERS']) > 1:
         index = -1 if set_to_second else 0
-        app.config['SCRAPYD_SERVERS'] = [app.config['SCRAPYD_SERVERS'][index]]
-        app.config['SCRAPYD_SERVERS_AUTHS'] = [app.config['SCRAPYD_SERVERS_AUTHS'][index]]
+        for key in SERVER_CONFIG_KEYS:
+            if key in app.config:
+                app.config[key] = [app.config[key][index]]
         app.config['SCRAPYD_SERVERS_AMOUNT'] = 1
 
 
 def switch_scrapyd(app):
     if len(app.config['SCRAPYD_SERVERS']) > 1:
-        app.config['SCRAPYD_SERVERS'] = app.config['SCRAPYD_SERVERS'][::-1]
-        app.config['SCRAPYD_SERVERS_AUTHS'] = app.config['SCRAPYD_SERVERS_AUTHS'][::-1]
+        for key in SERVER_CONFIG_KEYS:
+            if key in app.config:
+                app.config[key] = app.config[key][::-1]
 
 
 def sleep(seconds=10):

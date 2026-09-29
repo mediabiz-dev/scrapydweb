@@ -15,9 +15,10 @@ def test_config():
     assert create_app({'TESTING': True}).testing
 
 
+# The /hello route was removed in dc95cf3
 def test_hello(client):
     response = client.get('/hello')
-    assert get_text(response) == 'Hello, World!'
+    assert response.status_code == 404
 
 
 # def test_code_404(client):

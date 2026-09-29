@@ -152,7 +152,7 @@ def test_telnet_in_stats(app, client):
     req(app, client, view='schedule.run', kws=dict(node=NODE), data=run_data, ins="run results - ScrapydWeb")
 
     kws = dict(node=node, opt='stats', project=cst.PROJECT, spider=cst.SPIDER, job=cst.JOBID)
-    for i in range(1, 4):
+    for i in range(1, 7):  # Telnet stats can take more than 30s to show up
         sleep(10)
         print(i * 10)
         text, __ = req(app, client, view='log', kws=kws)

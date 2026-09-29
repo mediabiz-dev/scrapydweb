@@ -48,9 +48,9 @@ def test_check_update(app, client):
                        ins='<script>setTimeout("checkLatestVersion(',
                        nos='<!-- <script>setTimeout("checkLatestVersion(')
 
-    @app.context_processor
-    def inject_variable():
-        return dict(CHECK_LATEST_VERSION_FREQ=100)
+    # DEBUG defaults to True (default_settings.py), and in debug mode Flask refuses
+    # @app.context_processor once a request was handled, so register it directly
+    app.template_context_processors[None].append(lambda: dict(CHECK_LATEST_VERSION_FREQ=100))
 
     req_single_scrapyd(app, client, view='jobs', kws=dict(node=1), nos='<script>setTimeout("checkLatestVersion(')
     req_single_scrapyd(app, client, view='jobs', kws=dict(node=1, ui='mobile'), mobileui=True,
