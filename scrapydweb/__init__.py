@@ -116,6 +116,7 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
         SECRET_KEY='dev',
+        SEND_FILE_MAX_AGE_DEFAULT=3600,
     )
     # http://flask.pocoo.org/docs/1.0/config/#configuring-from-files
     app.config.from_object('scrapydweb.default_settings')
