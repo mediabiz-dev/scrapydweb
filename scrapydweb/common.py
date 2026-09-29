@@ -20,6 +20,15 @@ session.mount('http://', HTTPAdapter(pool_connections=1000, pool_maxsize=1000))
 session.mount('https://', HTTPAdapter(pool_connections=1000, pool_maxsize=1000))
 
 
+IN_CHUNK_SIZE = 500
+
+
+def chunks(values):
+    values = list(values)
+    for i in range(0, len(values), IN_CHUNK_SIZE):
+        yield values[i:i + IN_CHUNK_SIZE]
+
+
 # http://flask.pocoo.org/snippets/category/authentication/
 def authenticate():
     """Sends a 401 response that enables basic auth"""

@@ -5,9 +5,10 @@ import logging
 import traceback
 
 from flask import Blueprint, flash, render_template, request, send_file, url_for
+from sqlalchemy import case, func
 
 from ..operations.schedule import ScheduleRunView
-from ...common import handle_metadata
+from ...common import chunks, handle_metadata
 from ...models import Task, TaskResult, TaskJobResult, db
 from ...utils.scheduler import scheduler
 from ...vars import SCHEDULER_STATE_DICT, STATE_PAUSED, STATE_RUNNING, TIMER_TASKS_HISTORY_LOG
@@ -18,6 +19,18 @@ apscheduler_logger = logging.getLogger('apscheduler')
 metadata = dict(per_page=handle_metadata().get('tasks_per_page', 100))
 
 bp = Blueprint('tasks', __name__, url_prefix='/')
+
+
+def get_latest_task_job_results(task_result_ids):
+    latest_ids = []
+    for chunk in chunks(task_result_ids):
+        latest_ids.extend(i for (i, ) in db.session.query(func.max(TaskJobResult.id)).filter(
+            TaskJobResult.task_result_id.in_(chunk)).group_by(TaskJobResult.task_result_id))
+    latest_task_job_results = {}
+    for chunk in chunks(latest_ids):
+        for task_job_result in TaskJobResult.query.filter(TaskJobResult.id.in_(chunk)):
+            latest_task_job_results[task_job_result.task_result_id] = task_job_result
+    return latest_task_job_results
 
 
 @bp.route('/tasks/history/')
@@ -113,7 +126,7 @@ class TasksView(BaseView):
     def remove_apscheduler_job_without_task(self):
         # In case the task is remove from database while its apscheduler_job is still running
         apscheduler_job_id_set = set([j.id for j in self.scheduler.get_jobs(jobstore='default')])  # type(j.id): str
-        task_id_set = set([str(t.id) for t in Task.query.all()])  # type(t.id): int
+        task_id_set = set([str(i) for (i, ) in db.session.query(Task.id)])  # type(Task.id): int
         for i in apscheduler_job_id_set.difference(task_id_set):
             self.scheduler.remove_job(i, jobstore='default')
             msg = "apscheduler_job #{id} removed since task #{id} not exist. ".format(id=i)
@@ -122,6 +135,25 @@ class TasksView(BaseView):
 
     def process_tasks(self, tasks):
         with db.session.no_autoflush:  # To avoid in place updating
+            task_ids = [task.id for task in tasks.items]
+            task_result_stats = {}
+            for chunk in chunks(task_ids):
+                for task_id, run_times, fail_times, latest_id in db.session.query(
+                        TaskResult.task_id, func.count(TaskResult.id),
+                        func.sum(case([(TaskResult.fail_count > 0, 1)], else_=0)),
+                        func.max(TaskResult.id)).filter(TaskResult.task_id.in_(chunk)).group_by(TaskResult.task_id):
+                    task_result_stats[task_id] = (run_times, int(fail_times or 0), latest_id)
+            latest_task_results = {}
+            for chunk in chunks([stats[2] for stats in task_result_stats.values()]):
+                for task_result in TaskResult.query.filter(TaskResult.id.in_(chunk)):
+                    latest_task_results[task_result.task_id] = task_result
+            latest_task_job_results = get_latest_task_job_results(
+                [task_result.id for task_result in latest_task_results.values()
+                 if task_result.fail_count == 0 and task_result.pass_count == 1])
+            apscheduler_jobs = {}
+            for apscheduler_job in self.scheduler.get_jobs():
+                apscheduler_jobs.setdefault(apscheduler_job.id, apscheduler_job)
+
             # for task in tasks:  # TypeError: 'Pagination' object is not iterable  # tasks.item: list
             for index, task in enumerate(tasks.items, (tasks.page - 1) * tasks.per_page + 1):
                 # Columns: Name | Prev run result | Task results
@@ -130,15 +162,13 @@ class TasksView(BaseView):
                 task.timezone = task.timezone or self.scheduler.timezone
                 task.create_time = self.remove_microsecond(task.create_time)
                 task.update_time = self.remove_microsecond(task.update_time)
-                task_results = TaskResult.query.filter_by(task_id=task.id).order_by(TaskResult.id.desc())
-                task.run_times = task_results.count()
+                task.run_times, fail_times, __ = task_result_stats.get(task.id, (0, 0, None))
                 task.url_task_results = url_for('tasks', node=self.node, task_id=task.id)
                 if task.run_times > 0:
-                    task.fail_times = sum([int(t.fail_count > 0) for t in task_results])
-                    latest_task_result = task_results[0]
+                    task.fail_times = fail_times
+                    latest_task_result = latest_task_results[task.id]
                     if latest_task_result.fail_count == 0 and latest_task_result.pass_count == 1:
-                        task_job_result = TaskJobResult.query.filter_by(task_result_id=latest_task_result.id).order_by(
-                            TaskJobResult.id.desc()).first()
+                        task_job_result = latest_task_job_results.get(latest_task_result.id)
                         task.prev_run_result = task_job_result.result[-19:]  # task_N_2019-01-01T00_00_01
                         task.url_prev_run_result = url_for('log', node=task_job_result.node_name, opt='stats',
                                                            project=task.project, spider=task.spider,
@@ -161,7 +191,7 @@ class TasksView(BaseView):
                 # HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
                 # [SQL: 'SELECT apscheduler_jobs.job_state \nFROM apscheduler_jobs \nWHERE apscheduler_jobs.id = %(id_1)s'] [parameters: {'id_1': 2}]
                 # (Background on this error at: http://sqlalche.me/e/f405)
-                apscheduler_job = self.scheduler.get_job(str(task.id))  # Return type: Job or None
+                apscheduler_job = apscheduler_jobs.get(str(task.id))  # Return type: Job or None
                 if apscheduler_job:
                     self.logger.debug("apscheduler_job %s: %s", apscheduler_job.name, apscheduler_job)
                     if apscheduler_job.next_run_time:
@@ -197,13 +227,15 @@ class TasksView(BaseView):
         with_job = all([task_result.fail_count + task_result.pass_count == 1 for task_result in task_results.items])
 
         with db.session.no_autoflush:
+            if with_job:
+                latest_task_job_results = get_latest_task_job_results(
+                    [task_result.id for task_result in task_results.items])
             for index, task_result in enumerate(task_results.items,
                                                 (task_results.page - 1) * task_results.per_page + 1):
                 task_result.index = index
                 if with_job:  # To show task_job_result in task_results.html
                     self.template = 'scrapydweb/task_results_with_job.html'
-                    task_job_result = TaskJobResult.query.filter_by(task_result_id=task_result.id).order_by(
-                        TaskJobResult.id.desc()).first()
+                    task_job_result = latest_task_job_results.get(task_result.id)
                     task_result.task_job_result_id = task_job_result.id
                     task_result.run_time = self.remove_microsecond(task_job_result.run_time)
                     task_result.node_name = task_job_result.node_name
