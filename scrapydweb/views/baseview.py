@@ -18,7 +18,7 @@ from ..vars import (ALLOWED_SCRAPYD_LOG_EXTENSIONS, APSCHEDULER_DATABASE_URI,
                     DATA_PATH, DEMO_PROJECTS_PATH, DEPLOY_PATH, PARSE_PATH,
                     ALERT_TRIGGER_KEYS, LEGAL_NAME_PATTERN, SCHEDULE_ADDITIONAL,
                     SCHEDULE_PATH, STATE_PAUSED, STATE_RUNNING, STATS_PATH, STRICT_NAME_PATTERN)
-from ..utils.scheduler import scheduler
+from ..utils.scheduler import jobstores, scheduler
 
 
 class BaseView(View):
@@ -229,8 +229,7 @@ class BaseView(View):
         self.FEATURES += 'P' if self.IS_MOBILE else '-'
         self.FEATURES += 'M' if self.USE_MOBILEUI else '-'
         self.FEATURES += 'S' if self.ENABLE_HTTPS else '-'
-        self.any_running_apscheduler_jobs = any(job.next_run_time
-                                                for job in self.scheduler.get_jobs(jobstore='default'))
+        self.any_running_apscheduler_jobs = jobstores['default'].get_next_run_time() is not None
         if self.scheduler.state == STATE_PAUSED:
             self.FEATURES += '-'
         elif self.any_running_apscheduler_jobs:
@@ -341,11 +340,12 @@ class BaseView(View):
                         self.logger.error("!!!!! (%s) %s: %s", r.status_code, status, url)
                     else:
                         self.logger.debug("<<<<< (%s) %s: %s", r.status_code, status, url)
-                    if dumps_json:
-                        self.logger.debug("Got json from %s: %s", url, self.json_dumps(r_json))
-                    else:
-                        self.logger.debug("Got keys from (%s) %s %s: %s",
-                                          r_json.get('status_code'), r_json.get('status'), url, r_json.keys())
+                    if self.logger.isEnabledFor(logging.DEBUG):
+                        if dumps_json:
+                            self.logger.debug("Got json from %s: %s", url, self.json_dumps(r_json))
+                        else:
+                            self.logger.debug("Got keys from (%s) %s %s: %s",
+                                              r_json.get('status_code'), r_json.get('status'), url, r_json.keys())
 
                     return r.status_code, r_json
             else:
