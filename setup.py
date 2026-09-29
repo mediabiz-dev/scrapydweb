@@ -48,7 +48,7 @@ setup(
         "ptyprocess==0.6.0",  # Jun 22, 2018
         "pytz==2018.9",  # Jan 7, 2019
         "requests>=2.21.0",  # Dec 10, 2018
-        "setuptools>=40.6.3",  # Dec 11, 2018
+        "setuptools>=40.6.3,<81",  # Dec 11, 2018
         "six==1.16.0",  # May 5, 2021
         "SQLAlchemy==1.3.24",  # Mar 31, 2021
         "tzlocal==1.5.1",  # Dec 1, 2017
