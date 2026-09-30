@@ -136,6 +136,47 @@ If the proxy checks basic auth too, it forwards the `Authorization` header, so u
 </details>
 
 
+## :bar_chart: Prometheus Metrics
+<details>
+<summary>View contents</summary>
+
+Set `ENABLE_METRICS = True` in the config file to serve [Prometheus](https://prometheus.io) metrics at `/metrics` on `SCRAPYDWEB_PORT`.
+The HTTP metrics come from [prometheus_flask_exporter](https://github.com/rycus86/prometheus_flask_exporter), which labels the requests by endpoint instead of path, since the paths contain the names of projects, spiders and jobs.
+The other metrics are collected on each scrape:
+
+| Metric | Labels | What it is |
+|---|---|---|
+| `flask_http_request_duration_seconds` | `method`, `endpoint`, `status` | Histogram of the HTTP requests to ScrapydWeb |
+| `flask_http_request_total` | `method`, `status` | HTTP requests to ScrapydWeb |
+| `scrapydweb_info` | `version` | The version of ScrapydWeb |
+| `scrapydweb_scrapyd_up` | `node`, `group` | Whether the Scrapyd server answers `daemonstatus.json`, within 5 seconds |
+| `scrapydweb_scrapyd_jobs` | `node`, `group`, `state` | Pending, running and finished jobs of the Scrapyd server |
+| `scrapydweb_scheduler_running` | | Whether the scheduler of timer tasks is running |
+| `scrapydweb_timer_tasks` | `state` | Scheduled, paused and finished timer tasks |
+| `scrapydweb_timer_task_runs_total` | `task_id`, `task` | Runs of the timer task |
+| `scrapydweb_timer_task_failed_runs_total` | `task_id`, `task` | Runs of the timer task that fail to run the job on some node |
+| `scrapydweb_timer_task_last_run_timestamp_seconds` | `task_id`, `task` | When the timer task ran last time |
+| `scrapydweb_mcp_http_requests_total` | `status` | HTTP requests to the MCP server, including the ones rejected by its basic auth |
+| `scrapydweb_mcp_tool_calls_total` | `tool`, `status` | Calls of the MCP tool, `status` is `ok` or `error` |
+| `scrapydweb_mcp_tool_duration_seconds` | `tool` | Histogram of the calls of the MCP tool |
+
+The metrics of the MCP server are there only if `ENABLE_MCP` is True as well, and they are served at `/metrics` of ScrapydWeb too, not on `MCP_PORT`.
+
+If `ENABLE_AUTH` is True, or a reverse proxy checks basic auth, add the credentials to the scrape config:
+```yaml
+scrape_configs:
+  - job_name: scrapydweb
+    scheme: https
+    static_configs:
+      - targets: ['scrapydweb.example.com']
+    basic_auth:
+      username: username
+      password: password
+```
+
+</details>
+
+
 ## :heavy_check_mark: Running the tests
 <details>
 <summary>View contents</summary>
