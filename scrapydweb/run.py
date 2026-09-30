@@ -139,6 +139,13 @@ def main():
         #     cleanup_interval= cleanup_interval,
         #     threads=threads,
         # )
+    if app.config.get('ENABLE_MCP', False):
+        try:
+            from scrapydweb.mcp_server import start_mcp_server
+            start_mcp_server(app)
+        except Exception:
+            logger.exception("Fail to start the MCP server, ScrapydWeb runs without it")
+
     logger.info("Note that use_reloader is set to False in run.py")
     logger.info("For running Flask in production, check out http://flask.pocoo.org/docs/1.0/deploying/")
     app.run(host=app.config['SCRAPYDWEB_BIND'], port=app.config['SCRAPYDWEB_PORT'],

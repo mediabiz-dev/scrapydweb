@@ -1,5 +1,6 @@
 # coding: utf-8
 import dataclasses
+import importlib.util
 import logging
 from multiprocessing.dummy import Pool as ThreadPool
 import os
@@ -81,6 +82,8 @@ def check_app_config(config):
             check_assert(k, '', str, non_empty=True)
             assert os.path.isfile(config[k]), "%s not found: %s" % (k, config[k])
         logger.info("Running in HTTPS mode: %s, %s", config['CERTIFICATE_FILEPATH'], config['PRIVATEKEY_FILEPATH'])
+
+    check_mcp_config(config)
 
     _protocol = 'https' if config.get('ENABLE_HTTPS', False) else 'http'
     _bind = config.get('SCRAPYDWEB_BIND', '0.0.0.0')
@@ -314,6 +317,34 @@ def create_jobs_snapshot(url_jobs, auth, nodes):
             print("Fail to create jobs snapshot: %s\n%s" % (url_jobs, err))
         # else:
         #     print(url_jobs, r.status_code)
+
+
+def check_mcp_config(config):
+    if not config.get('ENABLE_MCP', False):
+        return
+    try:
+        assert config['ENABLE_MCP'] is True, "ENABLE_MCP should be True or False"
+        assert importlib.util.find_spec('mcp') is not None, \
+            "ENABLE_MCP requires Python >= 3.10 and the mcp package: pip install 'mcp>=2.2.0,<3'"
+        config.setdefault('MCP_BIND', '0.0.0.0')
+        config.setdefault('MCP_PORT', 5001)
+        assert isinstance(config['MCP_BIND'], str) and config['MCP_BIND'], "MCP_BIND should be a non-empty string"
+        port = config['MCP_PORT']
+        assert isinstance(port, int) and not isinstance(port, bool) and 0 < port < 65536, \
+            "MCP_PORT should be a port number. Current value: %s" % port
+        assert str(port) != str(config.get('SCRAPYDWEB_PORT', 5000)), "MCP_PORT should differ from SCRAPYDWEB_PORT"
+        for key in ['MCP_USERNAME', 'MCP_PASSWORD']:
+            assert isinstance(config.get(key), str) and config[key], "%s should be a non-empty string" % key
+        for key in ['MCP_ALLOWED_HOSTS', 'MCP_ALLOWED_ORIGINS']:
+            value = config.setdefault(key, [])
+            assert isinstance(value, list) and all(isinstance(i, str) for i in value), \
+                "%s should be a list of strings" % key
+    except AssertionError as err:
+        config['ENABLE_MCP'] = False
+        logger.error("MCP server disabled: %s", err)
+    else:
+        logger.info("MCP server enabled on %s:%s with basic auth for MCP_USERNAME '%s'",
+                    config['MCP_BIND'], config['MCP_PORT'], config['MCP_USERNAME'])
 
 
 def check_scrapyd_servers(config):

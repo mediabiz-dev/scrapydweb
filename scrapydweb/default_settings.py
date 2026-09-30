@@ -345,6 +345,24 @@ LOG_IGNORE_TRIGGER_STOP = False
 LOG_IGNORE_TRIGGER_FORCESTOP = False
 
 
+############################## MCP Server #####################################
+# The default is False, set it to True to serve an MCP (Model Context Protocol) endpoint at
+# http://MCP_BIND:MCP_PORT/mcp, so that MCP clients like Claude Code could deploy projects,
+# fire timer tasks, list jobs, and read the stats, logs and links to the items of jobs.
+# Note that it requires Python >= 3.10 and the mcp package: pip install 'mcp>=2.2.0,<3'
+ENABLE_MCP = False
+MCP_BIND = '0.0.0.0'
+# Accept connections on the specified port, the default is 5001, which should differ from SCRAPYDWEB_PORT.
+MCP_PORT = 5001
+# The MCP server always requires basic auth, both MCP_USERNAME and MCP_PASSWORD should be non-empty strings.
+MCP_USERNAME = os.environ.get('MCP_USERNAME', '')
+MCP_PASSWORD = os.environ.get('MCP_PASSWORD', '')
+# The default is [], set it to the Host header values (e.g. ['scrapydweb.example.com']) and Origin header
+# values (e.g. ['https://scrapydweb.example.com']) the MCP server should accept, to guard against DNS rebinding.
+MCP_ALLOWED_HOSTS = []
+MCP_ALLOWED_ORIGINS = []
+
+
 ############################## System #########################################
 # The default is False, set it to True to enable debug mode and the interactive debugger
 # would be shown in the browser instead of the "500 Internal Server Error" page.
