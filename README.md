@@ -89,6 +89,52 @@ The latest version of Google Chrome, Firefox, and Safari.
 </details>
 
 
+## :robot: MCP Server
+<details>
+<summary>View contents</summary>
+
+ScrapydWeb can serve an [MCP](https://modelcontextprotocol.io) endpoint, so that MCP clients like Claude Code can manage the cluster.
+It requires Python >= 3.10, where the `mcp` package gets installed along with ScrapydWeb.
+
+| Tool | What it does |
+|---|---|
+| `list_nodes` | Lists the Scrapyd nodes. The other tools take a node by its name or 1-based index. |
+| `list_deployable_projects` | Lists the projects in `SCRAPY_PROJECTS_DIR`. |
+| `deploy_project` | Packages a project in `SCRAPY_PROJECTS_DIR` on the ScrapydWeb server, like Auto packaging in the Deploy page, and adds it to all or some nodes. |
+| `list_timer_tasks` | Lists the timer tasks with their state and last run. |
+| `fire_timer_task` | Fires a timer task now, optionally waiting for the jobs it starts. |
+| `list_jobs` | Lists the running, pending or finished jobs of the nodes. |
+| `get_job_stats` | Gets the stats of a job, like the Stats page. |
+| `search_job_log` | Searches the log of a job for a text or regex, streaming it from the node. |
+| `get_job_items_link` | Gets the link to the items of a job, the same as the Items button of the Jobs page, and whether the file is there. |
+
+1. Set these in the config file. `MCP_USERNAME` and `MCP_PASSWORD` can also come from environment variables:
+```python
+ENABLE_MCP = True
+MCP_PORT = 5001  # The endpoint is http://MCP_BIND:MCP_PORT/mcp
+MCP_USERNAME = 'username'  # The MCP server always requires basic auth
+MCP_PASSWORD = 'password'
+```
+2. Add it to your MCP client, e.g. Claude Code:
+```bash
+claude mcp add --transport http scrapydweb https://scrapydweb.example.com/mcp \
+    --header "Authorization: Basic $(printf 'username:password' | base64)"
+```
+:heavy_exclamation_mark: Basic auth sends the password in every request, so serve the endpoint over HTTPS, e.g. behind a reverse proxy like Caddy:
+```
+scrapydweb.example.com {
+    handle /mcp* {
+        reverse_proxy scrapydweb:5001
+    }
+    reverse_proxy scrapydweb:5000
+}
+```
+Set `MCP_ALLOWED_HOSTS = ['scrapydweb.example.com']` to reject requests for other hosts.
+If the proxy checks basic auth too, it forwards the `Authorization` header, so use the same username and password for both.
+
+</details>
+
+
 ## :heavy_check_mark: Running the tests
 <details>
 <summary>View contents</summary>
