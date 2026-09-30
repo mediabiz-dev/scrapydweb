@@ -120,6 +120,7 @@ MCP_PASSWORD = 'password'
 claude mcp add --transport http scrapydweb https://scrapydweb.example.com/mcp \
     --header "Authorization: Basic $(printf 'username:password' | base64)"
 ```
+3. Optionally, copy [skills/scrapydweb-mcp](skills/scrapydweb-mcp) into your agent's skills folder (e.g. `~/.claude/skills/`): it teaches the agent how to chain the tools and read their results.
 :heavy_exclamation_mark: Basic auth sends the password in every request, so serve the endpoint over HTTPS, e.g. behind a reverse proxy like Caddy:
 ```
 scrapydweb.example.com {
