@@ -33,7 +33,7 @@ from tests.utils import (cst, find_samples, get_metric_samples, req, req_single_
 MCP_USERNAME = 'mcp-user'
 MCP_PASSWORD = 'mcp-password'
 TOOLS = ['list_nodes', 'list_deployable_projects', 'deploy_project', 'list_timer_tasks', 'fire_timer_task',
-         'list_jobs', 'get_job_stats', 'search_job_log', 'get_job_items_link']
+         'list_jobs', 'stop_job', 'get_job_stats', 'search_job_log', 'get_job_items_link']
 
 
 def basic_auth(username, password):
@@ -121,6 +121,7 @@ def test_mcp_over_http(app, mcp_url):
     assert sorted(tool.name for tool in tools.tools) == sorted(TOOLS)
     assert all(tool.description for tool in tools.tools)
     assert [tool.annotations.read_only_hint for tool in tools.tools if tool.name == 'list_nodes'] == [True]
+    assert [tool.annotations.destructive_hint for tool in tools.tools if tool.name == 'stop_job'] == [True]
     assert not nodes.is_error
     assert [n['node'] for n in nodes.structured_content['nodes']] == [1, 2]
     assert error.is_error and "Node 'fake-node' not found" in error.content[0].text
@@ -268,6 +269,48 @@ def test_timer_task(app, client):
         for __ in range(30):
             jobs = run(app, operations.list_jobs, nodes=[1], status='all', project=project)['jobs']
             if all(job['status'] == 'finished' for job in jobs):
+                break
+            sleep(1)
+        req(app, client, view='api', kws=dict(node=1, opt='delproject', project=project))
+        rmtree(os.path.join(app.config['LOCAL_SCRAPYD_LOGS_DIR'], project), ignore_errors=True)
+
+
+def test_stop_job(app, client):
+    project = 'mcp_stop_demo'
+    # In ScrapydWeb_demo.egg: CONCURRENT_REQUESTS=1, DOWNLOAD_DELAY=10
+    upload_file_deploy(app, client, filename='ScrapydWeb_demo.egg', project=project, redirect_project=project)
+
+    def start_job():
+        __, js = req(app, client, view='api', kws=dict(node=1, opt='start', project=project,
+                                                       version_spider_job=cst.SPIDER))
+        for __ in range(30):
+            if operations.get_job_status(app.config['SCRAPYD_SERVER_OBJECTS'][0], project, js['jobid']) == 'running':
+                return js['jobid']
+            sleep(1)
+        raise AssertionError("Job %s didn't start" % js['jobid'])
+
+    try:
+        job = start_job()
+        result = run(app, operations.stop_job, 1, project, job, wait_seconds=60)
+        assert (result['node'], result['job'], result['prevstate'], result['status']) == (1, job, 'running', 'finished')
+        assert 'tip' not in result
+
+        result = run(app, operations.stop_job, 1, project, job)
+        assert result['prevstate'] is None and 'finished already' in result['tip']
+
+        job = start_job()
+        result = run(app, operations.stop_job, 1, project, job, force=True)
+        assert result['prevstate'] == 'running' and result['force'] is True and 'status' not in result
+        assert 'shutting down' in result['tip']
+
+        with pytest.raises(ToolError, match="Invalid job"):
+            run(app, operations.stop_job, 1, project, '../job')
+        with pytest.raises(ToolError, match="Fail to stop job"):
+            run(app, operations.stop_job, 2, project, job)
+    finally:
+        for __ in range(30):
+            jobs = run(app, operations.list_jobs, nodes=[1], status='all', project=project)['jobs']
+            if all(job_['status'] == 'finished' for job_ in jobs):
                 break
             sleep(1)
         req(app, client, view='api', kws=dict(node=1, opt='delproject', project=project))

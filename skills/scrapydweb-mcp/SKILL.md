@@ -1,11 +1,11 @@
 ---
 name: scrapydweb-mcp
-description: ScrapydWeb MCP tools. Use when deploying a Scrapy project, firing a timer task, checking which spiders are running, or investigating a job's stats, log or items.
+description: ScrapydWeb MCP tools. Use when deploying a Scrapy project, firing a timer task, checking which spiders are running, stopping a job, or investigating a job's stats, log or items.
 ---
 
 # ScrapydWeb MCP
 
-The `scrapydweb` tools drive **production** Scrapyd nodes: a deploy replaces the code the spiders run, a fired task starts real crawls. The tool descriptions cover each parameter. This covers chaining the tools and reading their results.
+The `scrapydweb` tools drive **production** Scrapyd nodes: a deploy replaces the code the spiders run, a fired task starts real crawls, a stopped job loses the rest of its run. The tool descriptions cover each parameter. This covers chaining the tools and reading their results.
 
 If the tools are missing, the MCP server isn't connected; setup is in the "MCP Server" section of the ScrapydWeb README.
 
@@ -22,6 +22,14 @@ The default version is the folder's latest modification time. Redeploying unchan
 1. `list_timer_tasks`, then pick the task by name or spider. Only a `scheduled` task can be fired. If the task is `paused`, or `scheduler` isn't `STATE_RUNNING`, tell the user instead: it has to be resumed in the Timer Tasks page first.
 2. Name the task and its nodes to the user, and get their go-ahead.
 3. `fire_timer_task` with `wait_seconds` around 60. Done when the result lists every node of the task: `status: ok` with the new job ID in `result`, or the error that node returned. If the run outlasts the wait, `last_run` in `list_timer_tasks` shows it later.
+
+## Stop a job
+
+1. `list_jobs` for the node, project and job ID. Only a `pending` or `running` job can be stopped.
+2. Name the job and its node to the user, and get their go-ahead.
+3. `stop_job` with `wait_seconds` around 60. Done when `status` is `finished` for a job that was running, or `prevstate` is `pending` for one that was removed from the queue. `prevstate: null` means it wasn't pending or running anymore.
+
+A plain stop lets Scrapy finish the requests in progress, which can take a while with a big `DOWNLOAD_DELAY`. If it's still `running` after the wait, offer `force=true`: that shuts the spider down right away, without the usual cleanup.
 
 ## Investigate a job
 

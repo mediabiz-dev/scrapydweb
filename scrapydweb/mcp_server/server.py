@@ -19,11 +19,12 @@ Call list_nodes first: the other tools take a node by its name or 1-based index.
 - list_timer_tasks and fire_timer_task run the scheduled spider runs (timer tasks) right away.
 - list_jobs finds the jobs of the nodes. Pass the node, project, spider and job of a job to
   get_job_stats for its stats, search_job_log to grep its log, and get_job_items_link for the link
-  to the items it exported.
+  to the items it exported. stop_job stops a pending or running job.
 """
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
 WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False)
+DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False)
 
 Node = Annotated[str | int, Field(description="Name or 1-based index of the node, see list_nodes.")]
 Nodes = Annotated[list[str | int] | None, Field(
@@ -105,6 +106,24 @@ def create_mcp_server(app):
         """List the jobs of the nodes as reported by Scrapyd, running ones by default,
         with their project, spider, job ID, pid and start/end time."""
         return run(operations.list_jobs, nodes=nodes, status=status, project=project)
+
+    @mcp.tool(annotations=DESTRUCTIVE)
+    def stop_job(
+        node: Node,
+        project: Project,
+        job: Job,
+        force: Annotated[bool, Field(
+            description="Send a second cancel so that Scrapy shuts down right away instead of letting "
+                        "the requests in progress finish, like the ForceStop button.")] = False,
+        wait_seconds: Annotated[int, Field(
+            ge=0, le=operations.MAX_WAIT_SECONDS,
+            description="Wait up to this many seconds for a running job to finish. "
+                        "0 returns right after stopping.")] = 0,
+    ) -> dict[str, Any]:
+        """Stop a job on a node, like the Stop button of the Jobs page: a pending job is removed from the
+        queue, a running one gets closed by Scrapy. prevstate in the result is the state of the job before,
+        null if it was neither pending nor running."""
+        return run(operations.stop_job, node, project, job, force=force, wait_seconds=wait_seconds)
 
     @mcp.tool(annotations=READ_ONLY)
     def get_job_stats(

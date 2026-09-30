@@ -104,6 +104,7 @@ It requires Python >= 3.10, where the `mcp` package gets installed along with Sc
 | `list_timer_tasks` | Lists the timer tasks with their state and last run. |
 | `fire_timer_task` | Fires a timer task now, optionally waiting for the jobs it starts. |
 | `list_jobs` | Lists the running, pending or finished jobs of the nodes. |
+| `stop_job` | Stops a pending or running job, like the Stop and ForceStop buttons of the Jobs page, optionally waiting for it to finish. |
 | `get_job_stats` | Gets the stats of a job, like the Stats page. |
 | `search_job_log` | Searches the log of a job for a text or regex, streaming it from the node. |
 | `get_job_items_link` | Gets the link to the items of a job, the same as the Items button of the Jobs page, and whether the file is there. |
@@ -161,6 +162,9 @@ The other metrics are collected on each scrape:
 | `scrapydweb_mcp_tool_duration_seconds` | `tool` | Histogram of the calls of the MCP tool |
 
 The metrics of the MCP server are there only if `ENABLE_MCP` is True as well, and they are served at `/metrics` of ScrapydWeb too, not on `MCP_PORT`.
+
+[grafana/scrapydweb.json](grafana/scrapydweb.json) is a Grafana dashboard of these metrics: the Scrapyd nodes and their jobs, the timer tasks and their failing runs, the HTTP requests, the memory and CPU of the ScrapydWeb process, and the MCP server.
+Import it in Grafana and pick the Prometheus data source and the scrape job of ScrapydWeb.
 
 If `ENABLE_AUTH` is True, or a reverse proxy checks basic auth, add the credentials to the scrape config:
 ```yaml

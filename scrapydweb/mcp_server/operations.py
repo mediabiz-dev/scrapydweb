@@ -39,6 +39,7 @@ CRON_FIELDS = ['year', 'month', 'day', 'week', 'day_of_week', 'hour', 'minute', 
 JOB_STATUS_MAP = {'0': 'pending', '1': 'running', '2': 'finished'}
 
 MAX_WAIT_SECONDS = 120
+FORCE_STOP_INTERVAL = 2
 SUBPROCESS_TIMEOUT = 600
 REGEX_TIMEOUT = 1
 MAX_LINE_CHARS = 1000
@@ -275,8 +276,12 @@ def fire_timer_task(app, task_id, wait_seconds=0):
     return result
 
 
-def request_scrapyd(server, path, **params):
-    r = session.get('%s/%s' % (server.url(), path), params=params, auth=scrapyd_auth(server), timeout=30)
+def request_scrapyd(server, path, data=None, **params):
+    url = '%s/%s' % (server.url(), path)
+    if data is None:
+        r = session.get(url, params=params, auth=scrapyd_auth(server), timeout=30)
+    else:
+        r = session.post(url, data=data, auth=scrapyd_auth(server), timeout=30)
     r.raise_for_status()
     js = r.json()
     if js.get('status') != 'ok':
@@ -322,6 +327,63 @@ def list_jobs(app, nodes=None, status='running', project=None):
         jobs=[job for jobs, __ in results for job in jobs],
         errors=[error for __, error in results if error],
     )
+
+
+def get_job_status(server, project, job):
+    js = request_scrapyd(server, 'listjobs.json', project=project)
+    for status in JOB_STATUSES:
+        if any(job_.get('id') == job for job_ in js.get(status, [])):
+            return status
+    return None
+
+
+def stop_job(app, node, project, job, force=False, wait_seconds=0):
+    check_names(project=project, job=job)
+    index, server = resolve_node(app, node)
+    data = dict(project=project, job=job)
+    try:
+        prevstate = request_scrapyd(server, 'cancel.json', data=data).get('prevstate')
+        if force and prevstate == 'running':
+            time.sleep(FORCE_STOP_INTERVAL)
+            request_scrapyd(server, 'cancel.json', data=data)
+    except (requests.RequestException, ValueError) as err:
+        raise ToolError("Fail to stop job %s/%s on node %s: %s: %s"
+                        % (project, job, server.name, err.__class__.__name__, err))
+
+    result = node_info(index, server)
+    result.update(project=project, job=job, force=force, prevstate=prevstate)
+    if prevstate is None:
+        result['tip'] = ("The job was neither pending nor running on the node, it may have finished already. "
+                         "Call list_jobs with status='all' to find it.")
+        return result
+    if prevstate == 'pending':
+        result['tip'] = "The job was removed from the queue of the node before it started."
+        return result
+
+    wait_seconds = min(wait_seconds, MAX_WAIT_SECONDS)
+    status = 'running'
+    deadline = time.time() + wait_seconds
+    while wait_seconds > 0 and time.time() < deadline:
+        time.sleep(1)
+        try:
+            status = get_job_status(server, project, job)
+        except (requests.RequestException, ValueError) as err:
+            result['notes'] = ["Fail to check the status of the job: %s: %s" % (err.__class__.__name__, err)]
+            break
+        if status != 'running':
+            break
+    if wait_seconds > 0:
+        result['status'] = status
+    if status == 'running':
+        still_running = " It's still running after %s seconds." % wait_seconds if wait_seconds > 0 else ''
+        if force:
+            result['tip'] = ("Scrapy is shutting down the spider.%s "
+                             "Call list_jobs later to check that it has finished." % still_running)
+        else:
+            result['tip'] = ("Scrapy closes the spider gracefully, letting the requests in progress finish.%s "
+                             "Call list_jobs later to check that it has finished, or stop it again with force=true "
+                             "to shut it down right away." % still_running)
+    return result
 
 
 class LogStream(object):
