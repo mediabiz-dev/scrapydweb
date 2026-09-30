@@ -45,6 +45,10 @@ class ScrapydServer:
         return f"{self.name or '??'} @ {self.ip}:{self.port}"
 
 
+def scrapyd_auth(server: ScrapydServer):
+    return tuple(server.auth) if server.auth and all(server.auth) else None
+
+
 def find_by_name(servers: List[ScrapydServer], name: str) -> int:
     for i, server in enumerate(servers):
         if server.name == name:

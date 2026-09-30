@@ -23,7 +23,7 @@ from sqlalchemy import func
 
 from ..common import chunks, get_response_from_view, session
 from ..models import Task, TaskJobResult, TaskResult, db
-from ..servers import find_by_name
+from ..servers import find_by_name, scrapyd_auth
 from ..utils.scheduler import scheduler
 from ..vars import (DEPLOY_PATH, LEGAL_NAME_PATTERN, SCHEDULER_STATE_DICT, STATE_PAUSED, STRICT_NAME_PATTERN,
                     jobs_table_map)
@@ -62,10 +62,6 @@ def web_auth(app):
     if app.config.get('ENABLE_AUTH', False):
         return (str(app.config.get('USERNAME', '')), str(app.config.get('PASSWORD', '')))
     return None
-
-
-def scrapyd_auth(server):
-    return tuple(server.auth) if server.auth and all(server.auth) else None
 
 
 def get_view_url(app, endpoint, **kwargs):
