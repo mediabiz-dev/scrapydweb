@@ -12,6 +12,7 @@ import time
 import zipfile
 
 from flask import url_for
+from prometheus_client.parser import text_string_to_metric_families
 from six import string_types
 
 from logparser import __version__ as logparser_version
@@ -289,6 +290,18 @@ def switch_scrapyd(app):
         for key in SERVER_CONFIG_KEYS:
             if key in app.config:
                 app.config[key] = app.config[key][::-1]
+
+
+def get_metric_samples(client):
+    response = client.get('/metrics')
+    assert response.status_code == 200
+    return [sample for family in text_string_to_metric_families(response.get_data(as_text=True))
+            for sample in family.samples]
+
+
+def find_samples(samples, name, **labels):
+    return [sample.value for sample in samples
+            if sample.name == name and all(sample.labels.get(k) == v for k, v in labels.items())]
 
 
 def sleep(seconds=10):

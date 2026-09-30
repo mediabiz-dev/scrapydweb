@@ -19,13 +19,15 @@ from mcp.client import Client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.server.mcpserver.exceptions import ToolError
 
-from scrapydweb.mcp_server import operations, start_mcp_server
+from scrapydweb.mcp_server import create_asgi_app, operations, start_mcp_server
 from scrapydweb.mcp_server.auth import BasicAuthMiddleware
+from scrapydweb.metrics import init_metrics
 from scrapydweb.models import Task, db
 from scrapydweb.utils.check_app_config import check_mcp_config
 from scrapydweb.vars import jobs_table_map
 from scrapydweb.views.operations.deploy import get_modification_time
-from tests.utils import cst, req, req_single_scrapyd, sleep, upload_file_deploy
+from tests.utils import (cst, find_samples, get_metric_samples, req, req_single_scrapyd, sleep,
+                         upload_file_deploy)
 
 
 MCP_USERNAME = 'mcp-user'
@@ -122,6 +124,39 @@ def test_mcp_over_http(app, mcp_url):
     assert not nodes.is_error
     assert [n['node'] for n in nodes.structured_content['nodes']] == [1, 2]
     assert error.is_error and "Node 'fake-node' not found" in error.content[0].text
+
+
+def test_mcp_metrics(app):
+    init_metrics(app)
+    app.config.update(MCP_BIND='127.0.0.1', MCP_PORT=get_free_port(),
+                      MCP_USERNAME=MCP_USERNAME, MCP_PASSWORD=MCP_PASSWORD)
+    server = start_mcp_server(app)
+    mcp_url = 'http://127.0.0.1:%s/mcp' % app.config['MCP_PORT']
+
+    async def main():
+        async with httpx2.AsyncClient() as http:
+            response = await http.post(mcp_url, json=dict(jsonrpc='2.0', id=1, method='tools/list'))
+            assert response.status_code == 401
+
+        headers = {'Authorization': basic_auth(MCP_USERNAME, MCP_PASSWORD)}
+        async with httpx2.AsyncClient(headers=headers) as http:
+            async with Client(streamable_http_client(mcp_url, http_client=http)) as client:
+                await client.call_tool('list_nodes', {})
+                await client.call_tool('get_job_stats', dict(node='fake-node', project='p', spider='s', job='j'))
+
+    try:
+        asyncio.run(main())
+    finally:
+        server.should_exit = True
+
+    samples = get_metric_samples(app.test_client())
+    assert find_samples(samples, 'scrapydweb_mcp_http_requests_total', status='401') == [1]
+    assert find_samples(samples, 'scrapydweb_mcp_http_requests_total', status='200')[0] >= 2
+    assert find_samples(samples, 'scrapydweb_mcp_tool_calls_total', tool='list_nodes', status='ok') == [1]
+    assert find_samples(samples, 'scrapydweb_mcp_tool_calls_total', tool='get_job_stats', status='error') == [1]
+    assert find_samples(samples, 'scrapydweb_mcp_tool_duration_seconds_count', tool='list_nodes') == [1]
+    # The metrics of the MCP server are created once per app, so building its app again does not fail
+    create_asgi_app(app)
 
 
 def test_mcp_allowed_hosts(app):
