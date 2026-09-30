@@ -47,6 +47,15 @@ def main():
         sys.exit(u"\n{err}\n\nCheck and update your settings in {path}\n".format(
                  err=err, path=handle_slash(app.config['SCRAPYDWEB_SETTINGS_PY_PATH'])))
 
+    # Before require_login() so that the requests rejected by it are measured as well
+    if app.config.get('ENABLE_METRICS', False):
+        try:
+            from scrapydweb.metrics import init_metrics
+            init_metrics(app)
+            logger.info("Prometheus metrics served at /metrics")
+        except Exception:
+            logger.exception("Fail to set up the Prometheus metrics, ScrapydWeb runs without them")
+
     # https://stackoverflow.com/questions/34164464/flask-decorate-every-route-at-once
     @app.before_request
     def require_login():

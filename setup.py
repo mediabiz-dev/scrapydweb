@@ -46,6 +46,8 @@ setup(
         "mcp>=2.2.0,<3; python_version >= '3.10'",
         "MarkupSafe==2.0.0",  # May 12, 2021
         "pexpect==4.7.0",  # Apr 7, 2019
+        "prometheus-client>=0.17.0",  # May 24, 2023
+        "prometheus-flask-exporter>=0.23.2",  # Mar 11, 2025
         "ptyprocess==0.6.0",  # Jun 22, 2018
         "pytz==2018.9",  # Jan 7, 2019
         "regex>=2024.4.16; python_version >= '3.10'",

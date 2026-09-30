@@ -7,6 +7,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 import uvicorn
 
 from .auth import BasicAuthMiddleware
+from .metrics import MetricsMiddleware, get_mcp_metrics
 from .server import create_mcp_server
 
 
@@ -24,7 +25,10 @@ def create_asgi_app(app):
     )
     starlette_app = create_mcp_server(app).streamable_http_app(
         stateless_http=True, json_response=True, transport_security=transport_security)
-    return BasicAuthMiddleware(starlette_app, app.config['MCP_USERNAME'], app.config['MCP_PASSWORD'])
+    asgi_app = BasicAuthMiddleware(starlette_app, app.config['MCP_USERNAME'], app.config['MCP_PASSWORD'])
+    # Outside of BasicAuthMiddleware so that the requests rejected by it are counted as well
+    metrics = get_mcp_metrics(app)
+    return MetricsMiddleware(asgi_app, metrics) if metrics else asgi_app
 
 
 def start_mcp_server(app, timeout=10):

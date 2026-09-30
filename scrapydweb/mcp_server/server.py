@@ -1,4 +1,5 @@
 # coding: utf-8
+from contextlib import nullcontext
 from typing import Annotated, Any
 
 from mcp.server.mcpserver import MCPServer
@@ -7,6 +8,7 @@ from pydantic import Field
 
 from ..__version__ import __version__
 from . import operations
+from .metrics import get_mcp_metrics
 
 
 INSTRUCTIONS = """\
@@ -36,9 +38,11 @@ TailMb = Annotated[float | None, Field(
 
 def create_mcp_server(app):
     mcp = MCPServer(name='scrapydweb', version=__version__, instructions=INSTRUCTIONS)
+    metrics = get_mcp_metrics(app)
 
+    # Each tool is named after the function of operations it runs
     def run(func, *args, **kwargs):
-        with app.app_context():
+        with app.app_context(), (metrics.track_tool(func.__name__) if metrics else nullcontext()):
             return func(app, *args, **kwargs)
 
     @mcp.tool(annotations=READ_ONLY)

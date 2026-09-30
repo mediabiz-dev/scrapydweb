@@ -363,6 +363,14 @@ MCP_ALLOWED_HOSTS = []
 MCP_ALLOWED_ORIGINS = []
 
 
+############################## Prometheus Metrics #############################
+# The default is False, set it to True to serve Prometheus metrics at /metrics on SCRAPYDWEB_PORT:
+# the HTTP requests to ScrapydWeb, whether each Scrapyd server is up along with its jobs, the runs of
+# the timer tasks, and the requests and tool calls of the MCP server if ENABLE_MCP is True.
+# Note that /metrics requires basic auth as well if ENABLE_AUTH is True.
+ENABLE_METRICS = False
+
+
 ############################## System #########################################
 # The default is False, set it to True to enable debug mode and the interactive debugger
 # would be shown in the browser instead of the "500 Internal Server Error" page.
