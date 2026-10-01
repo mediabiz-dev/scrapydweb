@@ -168,12 +168,12 @@ def create_mcp_server(app):
         max_matches: Annotated[int, Field(ge=1, le=500)] = 50,
         tail_mb: TailMb = None,
         whole_log: Annotated[bool, Field(
-            description="Return the whole log (or its last tail_mb) as text in log instead of searching it. "
-                        "The pattern options are ignored, and logs over %s characters are refused."
-                        % operations.MAX_WHOLE_LOG_CHARS)] = False,
+            description="Instead of searching, return log_url: the link to the whole log, the same as the Source "
+                        "button of the Jobs page. The pattern options are ignored.")] = False,
     ) -> dict[str, Any]:
         """Search the log of a job for lines matching a pattern, returning them with their line numbers,
-        or return the whole log with whole_log. The log is streamed from the Scrapyd node, so big logs work too."""
+        or the link to the whole log with whole_log. The log is streamed from the Scrapyd node, so big logs work too.
+        With auth_embedded true, the link carries the login of the node: share it only with the user who asked."""
         return run(operations.search_job_log, node, project, spider, job, pattern, regex=regex,
                    case_sensitive=case_sensitive, context_lines=context_lines,
                    max_matches=max_matches, tail_mb=tail_mb, whole_log=whole_log)
@@ -182,7 +182,8 @@ def create_mcp_server(app):
     def get_job_items_link(node: Node, project: Project, spider: Spider, job: Job) -> dict[str, Any]:
         """Get the link to the items exported by a job, the same as the Items button of the Jobs page:
         a zipped CSV in the archive once the job is finished, or the CSV being written while it runs.
-        The file isn't downloaded, the result only tells whether it's there and its size."""
+        The file isn't downloaded, the result only tells whether it's there and its size.
+        With auth_embedded true, the link carries the login of the node: share it only with the user who asked."""
         return run(operations.get_job_items_link, node, project, spider, job)
 
     return mcp

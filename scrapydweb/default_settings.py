@@ -361,6 +361,12 @@ MCP_PASSWORD = os.environ.get('MCP_PASSWORD', '')
 # values (e.g. ['https://scrapydweb.example.com']) the MCP server should accept, to guard against DNS rebinding.
 MCP_ALLOWED_HOSTS = []
 MCP_ALLOWED_ORIGINS = []
+# The default is False, set it to True to embed the username and password of the Scrapyd server in the links
+# returned by get_job_items_link and search_job_log with whole_log,
+# e.g. https://username:password@scrapyd.example.com/..., so that they open without a login prompt.
+# Only for HTTPS links, never for the buttons of the Jobs page.
+# Note that the login then shows up in the conversation with the agent, and it grants the whole Scrapyd API.
+MCP_LINKS_WITH_AUTH = False
 
 
 ############################## Prometheus Metrics #############################

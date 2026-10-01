@@ -11,7 +11,7 @@ import re
 from shutil import copyfile, rmtree
 from subprocess import CalledProcessError, TimeoutExpired
 import time
-from urllib.parse import urljoin
+from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 import zlib
 
 from flask import url_for
@@ -46,7 +46,6 @@ MAX_LINE_CHARS = 1000
 MAX_RAW_LINE_BYTES = 1024 * 1024
 MAX_SCAN_BYTES = 2 * 1024 ** 3
 MAX_RESPONSE_CHARS = 200000
-MAX_WHOLE_LOG_CHARS = 1000000
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 500
 MAX_PARSE_LOG_BYTES = 256 * 1024 ** 2
@@ -509,28 +508,33 @@ def open_job_log(app, node, project, spider, job, tail_mb=None):
     raise ToolError("Log of job %s/%s/%s not found, tried: %s" % (project, spider, job, ', '.join(tried)))
 
 
-def read_job_log(app, node, project, spider, job, tail_mb=None):
-    lines = []
-    chars = 0
-    with open_job_log(app, node, project, spider, job, tail_mb) as log:
-        for line in log.lines():
-            chars += len(line) + 1
-            if chars > MAX_WHOLE_LOG_CHARS:
-                raise ToolError("The log is over %s characters by line %s, too big to return in one go. "
-                                "Pass tail_mb to get only its end (not for gzipped logs), "
-                                "or search it with a pattern instead." % (MAX_WHOLE_LOG_CHARS, log.lines_scanned))
-            lines.append(line)
-        result = log.info()
-    result['log'] = '\n'.join(lines)
-    return result
+def get_job_log_link(app, node, project, spider, job):
+    # The link of the Source button of the Jobs page
+    check_names(project=project, spider=spider, job=job)
+    __, server = resolve_node(app, node)
+    tried = []
+    for url in get_log_urls(app, server, project, spider, job):
+        try:
+            r = session.head(url, auth=scrapyd_auth(server), timeout=10)
+        except requests.RequestException as err:
+            tried.append('%s (%s)' % (url, err.__class__.__name__))
+            continue
+        if r.status_code != 200:
+            tried.append('%s (%s)' % (url, r.status_code))
+            continue
+        result = OrderedDict(log_url=public_link(server, urlsplit(url).path))
+        if r.headers.get('Content-Length', '').isdigit():
+            result['size_bytes'] = int(r.headers['Content-Length'])
+        return embed_auth(app, server, result, 'log_url')
+    raise ToolError("Log of job %s/%s/%s not found, tried: %s" % (project, spider, job, ', '.join(tried)))
 
 
 def search_job_log(app, node, project, spider, job, pattern=None, regex=False, case_sensitive=False,
                    context_lines=0, max_matches=50, tail_mb=None, whole_log=False):
     if whole_log:
-        return read_job_log(app, node, project, spider, job, tail_mb)
+        return get_job_log_link(app, node, project, spider, job)
     if not pattern:
-        raise ToolError("Pass a pattern to search for, or whole_log=true to get the whole log")
+        raise ToolError("Pass a pattern to search for, or whole_log=true to get the link to the whole log")
     if regex:
         try:
             compiled = regex_lib.compile(pattern, 0 if case_sensitive else regex_lib.IGNORECASE)
@@ -588,6 +592,39 @@ def search_job_log(app, node, project, spider, job, pattern=None, regex=False, c
     return result
 
 
+def url_with_auth(url, auth):
+    # Percent-encode the credentials so that '@', ':' or '/' in them can't change the host of the URL
+    parts = urlsplit(url)
+    host = parts.hostname or ''
+    if ':' in host:  # IPv6
+        host = '[%s]' % host
+    netloc = '%s:%s@%s' % (quote(str(auth[0]), safe=''), quote(str(auth[1]), safe=''), host)
+    if parts.port:
+        netloc += ':%s' % parts.port
+    return urlunsplit(parts._replace(netloc=netloc))
+
+
+def public_link(server, href):
+    # The same base as the Log, Source and Items buttons of the Jobs page
+    public_url = '%s/jobs' % server.public_url if server.public_url else 'http://%s:%s/jobs' % (server.ip, server.port)
+    return urljoin(public_url, href)
+
+
+def embed_auth(app, server, result, key):
+    # Only the links handed to the agent, the Jobs page keeps relying on the browser to log in
+    if not app.config.get('MCP_LINKS_WITH_AUTH', False):
+        return result
+    auth = scrapyd_auth(server)
+    if auth and urlsplit(result[key]).scheme == 'https':
+        result[key] = url_with_auth(result[key], auth)
+        result['auth_embedded'] = True
+    else:
+        result['auth_embedded'] = False
+        if auth:
+            result.setdefault('notes', []).append("The login of the node is left out of the link since it isn't HTTPS.")
+    return result
+
+
 def get_job_items_link(app, node, project, spider, job):
     from ..views.dashboard.jobs import get_items_href
 
@@ -617,8 +654,7 @@ def get_job_items_link(app, node, project, spider, job):
         raise ToolError("Job %s/%s/%s is pending, it has no items yet." % (project, spider, job))
 
     href_items = href_items or get_items_href(spider, job, start, finished=status == 'finished')
-    public_url = '%s/jobs' % server.public_url if server.public_url else 'http://%s:%s/jobs' % (server.ip, server.port)
-    items_url = urljoin(public_url, href_items)
+    items_url = public_link(server, href_items)
     result.update(status=status, start_time=start, items_url=items_url,
                   format='zipped CSV' if items_url.endswith('.zip') else 'CSV')
 
@@ -635,7 +671,7 @@ def get_job_items_link(app, node, project, spider, job):
             result.setdefault('notes', []).append(
                 "The link got status code %s. Its file name comes from the start minute of the job, "
                 "see the directory listing: %s" % (r.status_code, urljoin(items_url, '.')))
-    return result
+    return embed_auth(app, server, result, 'items_url')
 
 
 def curate_stats(stats, include_log_details, include_tail):

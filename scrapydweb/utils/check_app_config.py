@@ -335,6 +335,8 @@ def check_mcp_config(config):
         assert str(port) != str(config.get('SCRAPYDWEB_PORT', 5000)), "MCP_PORT should differ from SCRAPYDWEB_PORT"
         for key in ['MCP_USERNAME', 'MCP_PASSWORD']:
             assert isinstance(config.get(key), str) and config[key], "%s should be a non-empty string" % key
+        assert isinstance(config.setdefault('MCP_LINKS_WITH_AUTH', False), bool), \
+            "MCP_LINKS_WITH_AUTH should be True or False"
         for key in ['MCP_ALLOWED_HOSTS', 'MCP_ALLOWED_ORIGINS']:
             value = config.setdefault(key, [])
             assert isinstance(value, list) and all(isinstance(i, str) for i in value), \
