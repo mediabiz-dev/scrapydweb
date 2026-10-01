@@ -32,6 +32,9 @@ Nodes = Annotated[list[str | int] | None, Field(
 Project = Annotated[str, Field(description="Project of the job.")]
 Spider = Annotated[str, Field(description="Spider of the job.")]
 Job = Annotated[str, Field(description="ID of the job, without the extension of its log file.")]
+Limit = Annotated[int, Field(ge=1, le=operations.MAX_PAGE_SIZE, description="Max number of results to return.")]
+Offset = Annotated[int, Field(
+    ge=0, description="Number of results to skip, pass next_offset of the previous call to get the next page.")]
 TailMb = Annotated[float | None, Field(
     gt=0, description="Only scan the last N megabytes of the log, handy for big or running jobs. "
                       "Ignored for gzipped logs. Defaults to scanning the whole log.")]
@@ -79,10 +82,14 @@ def create_mcp_server(app):
     def list_timer_tasks(
         project: Annotated[str | None, Field(description="Only the tasks of this project.")] = None,
         spider: Annotated[str | None, Field(description="Only the tasks of this spider.")] = None,
+        limit: Limit = operations.DEFAULT_PAGE_SIZE,
+        offset: Offset = 0,
     ) -> dict[str, Any]:
         """List the timer tasks (scheduled spider runs) with their cron schedule, nodes, state
-        (scheduled, paused or finished), next run time, and the result of their last run."""
-        return run(operations.list_timer_tasks, project=project, spider=spider)
+        (scheduled, paused or finished), next run time, and the result of their last run.
+        Returns a page of the tasks by ID: total is the number of matching tasks,
+        next_offset is null on the last page."""
+        return run(operations.list_timer_tasks, project=project, spider=spider, limit=limit, offset=offset)
 
     @mcp.tool(annotations=WRITE)
     def fire_timer_task(
@@ -102,10 +109,16 @@ def create_mcp_server(app):
         status: Annotated[str, Field(
             description="One of 'running', 'pending', 'finished' or 'all'.")] = 'running',
         project: Annotated[str | None, Field(description="Only the jobs of this project.")] = None,
+        spider: Annotated[str | None, Field(description="Only the jobs of this spider.")] = None,
+        limit: Limit = operations.DEFAULT_PAGE_SIZE,
+        offset: Offset = 0,
     ) -> dict[str, Any]:
         """List the jobs of the nodes as reported by Scrapyd, running ones by default,
-        with their project, spider, job ID, pid and start/end time."""
-        return run(operations.list_jobs, nodes=nodes, status=status, project=project)
+        with their project, spider, job ID, pid and start/end time.
+        Returns a page of the jobs, pending first, then running and finished ones, the latest started first:
+        total is the number of matching jobs, next_offset is null on the last page."""
+        return run(operations.list_jobs, nodes=nodes, status=status, project=project, spider=spider,
+                   limit=limit, offset=offset)
 
     @mcp.tool(annotations=DESTRUCTIVE)
     def stop_job(
@@ -146,19 +159,24 @@ def create_mcp_server(app):
         project: Project,
         spider: Spider,
         job: Job,
-        pattern: Annotated[str, Field(description="Text to look for, or a regex if regex is true.")],
+        pattern: Annotated[str | None, Field(
+            description="Text to look for, or a regex if regex is true. Required unless whole_log is true.")] = None,
         regex: Annotated[bool, Field(description="Treat pattern as a Python regex.")] = False,
         case_sensitive: bool = False,
         context_lines: Annotated[int, Field(
             ge=0, le=20, description="Lines to include before and after each match.")] = 0,
         max_matches: Annotated[int, Field(ge=1, le=500)] = 50,
         tail_mb: TailMb = None,
+        whole_log: Annotated[bool, Field(
+            description="Return the whole log (or its last tail_mb) as text in log instead of searching it. "
+                        "The pattern options are ignored, and logs over %s characters are refused."
+                        % operations.MAX_WHOLE_LOG_CHARS)] = False,
     ) -> dict[str, Any]:
-        """Search the log of a job for lines matching a pattern, returning them with their line numbers.
-        The log is streamed from the Scrapyd node, so big logs work too."""
+        """Search the log of a job for lines matching a pattern, returning them with their line numbers,
+        or return the whole log with whole_log. The log is streamed from the Scrapyd node, so big logs work too."""
         return run(operations.search_job_log, node, project, spider, job, pattern, regex=regex,
                    case_sensitive=case_sensitive, context_lines=context_lines,
-                   max_matches=max_matches, tail_mb=tail_mb)
+                   max_matches=max_matches, tail_mb=tail_mb, whole_log=whole_log)
 
     @mcp.tool(annotations=READ_ONLY)
     def get_job_items_link(node: Node, project: Project, spider: Spider, job: Job) -> dict[str, Any]:

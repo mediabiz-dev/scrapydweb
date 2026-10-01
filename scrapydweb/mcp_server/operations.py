@@ -46,6 +46,9 @@ MAX_LINE_CHARS = 1000
 MAX_RAW_LINE_BYTES = 1024 * 1024
 MAX_SCAN_BYTES = 2 * 1024 ** 3
 MAX_RESPONSE_CHARS = 200000
+MAX_WHOLE_LOG_CHARS = 1000000
+DEFAULT_PAGE_SIZE = 100
+MAX_PAGE_SIZE = 500
 MAX_PARSE_LOG_BYTES = 256 * 1024 ** 2
 
 LOG_LEVELS_WITH_DETAILS = ['critical_logs', 'error_logs', 'warning_logs']
@@ -57,6 +60,19 @@ def clip(text, limit=MAX_LINE_CHARS):
     if len(text) <= limit:
         return text
     return '%s... [%s more chars]' % (text[:limit], len(text) - limit)
+
+
+def check_page(limit, offset):
+    if not 1 <= limit <= MAX_PAGE_SIZE:
+        raise ToolError("limit should be between 1 and %s" % MAX_PAGE_SIZE)
+    if offset < 0:
+        raise ToolError("offset should not be negative")
+
+
+def page_info(total, limit, offset):
+    # next_offset is None on the last page
+    return OrderedDict(total=total, offset=offset,
+                       next_offset=offset + limit if offset + limit < total else None)
 
 
 def web_auth(app):
@@ -195,15 +211,18 @@ def deploy_project(app, folder=None, nodes=None, project=None, version=None):
     )
 
 
-def list_timer_tasks(app, project=None, spider=None):
+def list_timer_tasks(app, project=None, spider=None, limit=DEFAULT_PAGE_SIZE, offset=0):
+    check_page(limit, offset)
     query = Task.query
     if project:
         query = query.filter_by(project=project)
     if spider:
         query = query.filter_by(spider=spider)
-    tasks = query.order_by(Task.id).all()
+    total = query.count()
+    tasks = query.order_by(Task.id).offset(offset).limit(limit).all()
 
-    latest_ids = [i for (i, ) in db.session.query(func.max(TaskResult.id)).group_by(TaskResult.task_id)]
+    latest_ids = [i for (i, ) in db.session.query(func.max(TaskResult.id)).filter(
+        TaskResult.task_id.in_([task.id for task in tasks])).group_by(TaskResult.task_id)]
     latest_results = {}
     for chunk in chunks(latest_ids):
         latest_results.update((r.task_id, r) for r in TaskResult.query.filter(TaskResult.id.in_(chunk)))
@@ -237,7 +256,8 @@ def list_timer_tasks(app, project=None, spider=None):
                 fail_count=latest.fail_count,
             ) if latest else None,
         ))
-    return OrderedDict(scheduler=SCHEDULER_STATE_DICT[scheduler.state], tasks=result)
+    return OrderedDict(scheduler=SCHEDULER_STATE_DICT[scheduler.state], **page_info(total, limit, offset),
+                       tasks=result)
 
 
 def get_task_run(task_result_id):
@@ -289,9 +309,10 @@ def request_scrapyd(server, path, data=None, **params):
     return js
 
 
-def list_jobs(app, nodes=None, status='running', project=None):
+def list_jobs(app, nodes=None, status='running', project=None, spider=None, limit=DEFAULT_PAGE_SIZE, offset=0):
     if status not in JOB_STATUSES + ['all']:
         raise ToolError("status should be one of: %s" % ', '.join(JOB_STATUSES + ['all']))
+    check_page(limit, offset)
     statuses = JOB_STATUSES if status == 'all' else [status]
 
     def fetch(index, server):
@@ -307,6 +328,8 @@ def list_jobs(app, nodes=None, status='running', project=None):
         for project_, js in responses:
             for status_ in statuses:
                 for job in js.get(status_, []):
+                    if spider and job.get('spider') != spider:
+                        continue
                     jobs.append(OrderedDict(
                         node=index, name=server.name, status=status_,
                         project=job.get('project', project_), spider=job.get('spider'), job=job.get('id'),
@@ -323,8 +346,13 @@ def list_jobs(app, nodes=None, status='running', project=None):
             return [], error
 
     results = run_on_nodes(app, fetch_or_error, resolve_nodes(app, nodes))
+    jobs = [job for jobs_, __ in results for job in jobs_]
+    # A stable order across the pages: by status, then the latest started first, pending ones in the queue order
+    jobs.sort(key=lambda job: job['start_time'] or '', reverse=True)
+    jobs.sort(key=lambda job: JOB_STATUSES.index(job['status']))
     return OrderedDict(
-        jobs=[job for jobs, __ in results for job in jobs],
+        **page_info(len(jobs), limit, offset),
+        jobs=jobs[offset:offset + limit],
         errors=[error for __, error in results if error],
     )
 
@@ -481,8 +509,28 @@ def open_job_log(app, node, project, spider, job, tail_mb=None):
     raise ToolError("Log of job %s/%s/%s not found, tried: %s" % (project, spider, job, ', '.join(tried)))
 
 
-def search_job_log(app, node, project, spider, job, pattern, regex=False, case_sensitive=False,
-                   context_lines=0, max_matches=50, tail_mb=None):
+def read_job_log(app, node, project, spider, job, tail_mb=None):
+    lines = []
+    chars = 0
+    with open_job_log(app, node, project, spider, job, tail_mb) as log:
+        for line in log.lines():
+            chars += len(line) + 1
+            if chars > MAX_WHOLE_LOG_CHARS:
+                raise ToolError("The log is over %s characters by line %s, too big to return in one go. "
+                                "Pass tail_mb to get only its end (not for gzipped logs), "
+                                "or search it with a pattern instead." % (MAX_WHOLE_LOG_CHARS, log.lines_scanned))
+            lines.append(line)
+        result = log.info()
+    result['log'] = '\n'.join(lines)
+    return result
+
+
+def search_job_log(app, node, project, spider, job, pattern=None, regex=False, case_sensitive=False,
+                   context_lines=0, max_matches=50, tail_mb=None, whole_log=False):
+    if whole_log:
+        return read_job_log(app, node, project, spider, job, tail_mb)
+    if not pattern:
+        raise ToolError("Pass a pattern to search for, or whole_log=true to get the whole log")
     if regex:
         try:
             compiled = regex_lib.compile(pattern, 0 if case_sensitive else regex_lib.IGNORECASE)
