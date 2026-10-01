@@ -5,7 +5,7 @@ description: ScrapydWeb MCP tools. Use when deploying a Scrapy project, firing a
 
 # ScrapydWeb MCP
 
-The `scrapydweb` tools drive **production** Scrapyd nodes: a deploy replaces the code the spiders run, a fired task starts real crawls, a stopped job loses the rest of its run. The tool descriptions cover each parameter. This covers chaining the tools and reading their results.
+The `scrapydweb` tools drive **production** Scrapyd nodes: a deploy replaces the code the spiders run, a fired task starts real crawls, a stopped job loses the rest of its run. This covers chaining the tools and reading their results; [Tools](#tools) lists every tool with its parameters.
 
 If the tools are missing, the MCP server isn't connected; setup is in the "MCP Server" section of the ScrapydWeb README.
 
@@ -36,12 +36,30 @@ A plain stop lets Scrapy finish the requests in progress, which can take a while
 A job is identified by its node, project, spider and job ID. Take all four from `list_jobs` (`status='all'`, filtered by `project`) or from the user. Runs started by a timer task have job IDs like `task_<task name>_<timestamp>`.
 
 1. `get_job_stats` first. It gives the finish reason, pages and items, counts per log level and, when `source` is `logparser`, the latest error and warning lines. With `source: report` the node had no LogParser file, so those lines have to come from the log.
-2. `search_job_log` for specifics. Search plain text by default and switch to `regex` only for real patterns. Pass `tail_mb` for running or very large jobs. When a `tip` says the search stopped at a limit, narrow the pattern.
+2. `search_job_log` for specifics. Search plain text by default and switch to `regex` only for real patterns. Pass `tail_mb` for running or very large jobs. When a `tip` says the search stopped at a limit, narrow the pattern. When the user wants the log itself, or the matches can't answer the question, pass `whole_log=true` to get the log as text in `log`; a log over 1M characters is refused, so take its end with `tail_mb`.
 3. `get_job_items_link` when the user wants the scraped items. It returns a link to hand over, not the items: a zipped CSV once the job has finished, or the CSV still being written while it runs.
 
 Done when the answer rests on evidence: quote the stats values or log lines behind it.
 
 ## Reading results
 
+- `list_jobs` and `list_timer_tasks` return a page of 100 by default. When `next_offset` isn't null there are more: narrow the call with `project`, `spider` or `status` first, and only pass `offset=next_offset` when you really need the rest. `total` is the number of matches.
 - `list_jobs` only knows what Scrapyd remembers: pending, running and recently finished jobs. `get_job_items_link` also finds older jobs, through the Jobs page history.
 - `available: false` on an items link means the file isn't where the Items button of the Jobs page would point either. That name is guessed from the job's start minute and the country code in its job ID, so find the real file in the directory listing given in `notes`.
+
+## Tools
+
+`node` is a node name or 1-based index from `list_nodes`; `nodes` is a list of them and defaults to all nodes. A job is `node`, `project`, `spider` and `job` (its ID, without the log file extension).
+
+| Tool | Effect | Parameters (default) |
+|---|---|---|
+| `list_nodes` | read | none |
+| `list_deployable_projects` | read | none |
+| `deploy_project` | write | `folder` (required when there are several projects), `nodes`, `project` (`[deploy] project` in `scrapy.cfg`, or the folder name), `version` (the folder's latest modification time) |
+| `list_timer_tasks` | read | `project`, `spider`, `limit` (100, max 500), `offset` (0) |
+| `fire_timer_task` | write | `task_id` (required), `wait_seconds` (0, max 120) |
+| `list_jobs` | read | `nodes`, `status` (`running`; or `pending`, `finished`, `all`), `project`, `spider`, `limit` (100, max 500), `offset` (0) |
+| `stop_job` | destructive | `node`, `project`, `job` (all required, no `spider`), `force` (false), `wait_seconds` (0, max 120) |
+| `get_job_stats` | read | the job, `include_log_details` (true), `include_tail` (false) |
+| `search_job_log` | read | the job, `pattern` (required unless `whole_log`), `whole_log` (false), `regex` (false), `case_sensitive` (false), `context_lines` (0, max 20), `max_matches` (50, max 500), `tail_mb` (whole log; ignored for gzipped logs) |
+| `get_job_items_link` | read | the job |
