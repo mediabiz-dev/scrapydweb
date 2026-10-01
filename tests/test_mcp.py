@@ -402,21 +402,30 @@ def test_search_job_log(app, demo_job):
         run(app, operations.search_job_log, pattern='x', **dict(demo_job, job='../../etc/passwd'))
 
 
-def test_search_job_log_whole_log(app, demo_job, monkeypatch):
-    with open(os.path.join(cst.ROOT_DIR, 'data', cst.DEMO_LOG), encoding='utf-8') as f:
-        expected = f.read().replace('\r\n', '\n').rstrip('\n')
+def test_search_job_log_whole_log(app, demo_job):
+    log_path = os.path.join(app.config['LOCAL_SCRAPYD_LOGS_DIR'], 'mcp_demo', cst.SPIDER, 'mcp_job.log')
     result = run(app, operations.search_job_log, whole_log=True, pattern='ignored', **demo_job)
-    assert result['log'] == expected
-    assert result['lines_scanned'] == expected.count('\n') + 1 and 'matches' not in result
+    assert result['log_url'] == 'http://127.0.0.1:6800/logs/mcp_demo/%s/mcp_job.log' % cst.SPIDER
+    assert result['size_bytes'] == os.path.getsize(log_path)
+    assert 'matches' not in result and 'auth_embedded' not in result
 
-    result = run(app, operations.search_job_log, whole_log=True, tail_mb=0.001, **demo_job)
-    assert expected.endswith(result['log']) and 'tail of the log' in result['notes'][0]
+    server = app.config['SCRAPYD_SERVER_OBJECTS'][0]
+    username, password = operations.scrapyd_auth(server)
+    app.config['MCP_LINKS_WITH_AUTH'] = True
+    server.public_url = 'https://scrapyd.example.com'
+    try:
+        result = run(app, operations.search_job_log, whole_log=True, **demo_job)
+        assert result['log_url'] == 'https://%s:%s@scrapyd.example.com/logs/mcp_demo/%s/mcp_job.log' % (
+            username, password, cst.SPIDER)
+        assert result['auth_embedded'] is True
+    finally:
+        app.config['MCP_LINKS_WITH_AUTH'] = False
+        server.public_url = ''
 
     with pytest.raises(ToolError, match="Pass a pattern to search for, or whole_log=true"):
         run(app, operations.search_job_log, **demo_job)
-    monkeypatch.setattr(operations, 'MAX_WHOLE_LOG_CHARS', 100)
-    with pytest.raises(ToolError, match="The log is over 100 characters by line .*, too big to return in one go"):
-        run(app, operations.search_job_log, whole_log=True, **demo_job)
+    with pytest.raises(ToolError, match="not found, tried"):
+        run(app, operations.search_job_log, whole_log=True, **dict(demo_job, job=cst.FAKE_JOBID))
 
 
 def test_search_job_log_with_catastrophic_regex(app, demo_job):
@@ -501,8 +510,21 @@ def test_get_job_items_link(app, client, monkeypatch):
     app.config['SCRAPYD_SERVER_OBJECTS'][0].public_url = 'https://scrapyd.example.com'
     result = run(app, operations.get_job_items_link, job=finished['id'], **job)
     assert result['items_url'] == 'https://scrapyd.example.com/items/archive/tubi/CA/tubi_CA_20260930-10-05.csv.zip'
-    assert result['available'] is True
-    app.config['SCRAPYD_SERVER_OBJECTS'][0].public_url = ''
+    assert result['available'] is True and 'auth_embedded' not in result
+
+    app.config['MCP_LINKS_WITH_AUTH'] = True
+    server = app.config['SCRAPYD_SERVER_OBJECTS'][0]
+    username, password = operations.scrapyd_auth(server)
+    result = run(app, operations.get_job_items_link, job=finished['id'], **job)
+    assert result['items_url'] == 'https://%s:%s@scrapyd.example.com/items/archive/tubi/CA/%s' % (
+        username, password, 'tubi_CA_20260930-10-05.csv.zip')
+    assert result['auth_embedded'] is True and result['available'] is True
+
+    server.public_url = ''
+    result = run(app, operations.get_job_items_link, job=finished['id'], **job)
+    assert result['items_url'].startswith('http://127.0.0.1:6800/') and result['auth_embedded'] is False
+    assert "isn't HTTPS" in result['notes'][-1]
+    app.config['MCP_LINKS_WITH_AUTH'] = False
 
     with pytest.raises(ToolError, match="is pending"):
         run(app, operations.get_job_items_link, job=pending['id'], **job)
@@ -584,6 +606,14 @@ def test_get_job_stats_from_logparser(app, demo_job, monkeypatch):
         run(app, operations.get_job_stats, **demo_job)
 
 
+def test_url_with_auth():
+    assert operations.url_with_auth('https://example.com/items/a.csv', ('user', 'pass')) == \
+        'https://user:pass@example.com/items/a.csv'
+    assert operations.url_with_auth('https://old:old@example.com:8443/a.csv?x=1#y', ('us@r', 'p:a/s s@x')) == \
+        'https://us%40r:p%3Aa%2Fs%20s%40x@example.com:8443/a.csv?x=1#y'
+    assert operations.url_with_auth('https://[::1]:6800/a.csv', ('user', 1234)) == 'https://user:1234@[::1]:6800/a.csv'
+
+
 def test_check_mcp_config():
     valid = dict(ENABLE_MCP=True, MCP_BIND='0.0.0.0', MCP_PORT=5001, MCP_USERNAME='username', MCP_PASSWORD='password',
                  SCRAPYDWEB_PORT=5000)
@@ -592,7 +622,8 @@ def test_check_mcp_config():
     assert config['ENABLE_MCP'] is True
 
     for invalid in [dict(ENABLE_MCP='True'), dict(MCP_PASSWORD=''), dict(MCP_USERNAME=None), dict(MCP_PORT=5000),
-                    dict(MCP_PORT='5001'), dict(MCP_PORT=70000), dict(MCP_ALLOWED_HOSTS='example.com')]:
+                    dict(MCP_PORT='5001'), dict(MCP_PORT=70000), dict(MCP_ALLOWED_HOSTS='example.com'),
+                    dict(MCP_LINKS_WITH_AUTH='True')]:
         config = dict(valid, **invalid)
         check_mcp_config(config)
         assert config['ENABLE_MCP'] is False, invalid
