@@ -223,6 +223,64 @@ def test_list_jobs(app):
 
     with pytest.raises(ToolError, match="status should be one of"):
         run(app, operations.list_jobs, status='fake-status')
+    with pytest.raises(ToolError, match="limit should be between 1 and"):
+        run(app, operations.list_jobs, limit=0)
+    with pytest.raises(ToolError, match="offset should not be negative"):
+        run(app, operations.list_jobs, offset=-1)
+
+
+def test_list_jobs_pages(app, monkeypatch):
+    listjobs = dict(
+        status='ok',
+        pending=[dict(project='p', spider='s1', id='pending1'), dict(project='p', spider='s2', id='pending2')],
+        running=[dict(project='p', spider='s1', id='running1', start_time='2026-01-01 00:00:00')],
+        finished=[dict(project='p', spider='s1', id='finished_older', start_time='2026-01-01 00:00:01'),
+                  dict(project='p', spider='s2', id='finished_s2', start_time='2026-01-01 00:00:02'),
+                  dict(project='p', spider='s1', id='finished_newer', start_time='2026-01-01 00:00:03')],
+    )
+    monkeypatch.setattr(operations, 'request_scrapyd', lambda server, path, **params: listjobs)
+
+    def page(**kwargs):
+        result = run(app, operations.list_jobs, nodes=[1], status='all', **kwargs)
+        return result['total'], result['offset'], result['next_offset'], [job['job'] for job in result['jobs']]
+
+    assert page() == (6, 0, None, ['pending1', 'pending2', 'running1',
+                                   'finished_newer', 'finished_s2', 'finished_older'])
+    assert page(limit=4) == (6, 0, 4, ['pending1', 'pending2', 'running1', 'finished_newer'])
+    assert page(limit=4, offset=4) == (6, 4, None, ['finished_s2', 'finished_older'])
+    assert page(offset=10) == (6, 10, None, [])
+    assert page(spider='s1', limit=2) == (4, 0, 2, ['pending1', 'running1'])
+    assert page(spider='s1', limit=2, offset=2) == (4, 2, None, ['finished_newer', 'finished_older'])
+
+
+def test_list_timer_tasks_pages(app):
+    names = ['mcp_page_task_%s' % i for i in range(3)]
+    with app.app_context():
+        tasks = [Task(name=name, trigger='cron', project='mcp_page_project', version='v',
+                      spider='s1' if name != names[1] else 's2', jobid='j', settings_arguments='{}',
+                      selected_node_names='[]', year='2036', month='*', day='*', week='*', day_of_week='*',
+                      hour='*', minute='*', second='0', jitter=0, coalesce='True', max_instances=1)
+                 for name in names]
+        db.session.add_all(tasks)
+        db.session.commit()
+        task_ids = [task.id for task in tasks]
+
+    def page(**kwargs):
+        result = run(app, operations.list_timer_tasks, project='mcp_page_project', **kwargs)
+        return result['total'], result['next_offset'], [task['name'] for task in result['tasks']]
+
+    try:
+        assert page() == (3, None, names)
+        assert page(limit=2) == (3, 2, names[:2])
+        assert page(limit=2, offset=2) == (3, None, names[2:])
+        assert page(spider='s1') == (2, None, [names[0], names[2]])
+        with pytest.raises(ToolError, match="limit should be between 1 and"):
+            page(limit=operations.MAX_PAGE_SIZE + 1)
+    finally:
+        with app.app_context():
+            for task_id in task_ids:
+                db.session.delete(Task.query.get(task_id))
+            db.session.commit()
 
 
 def test_timer_task(app, client):
@@ -342,6 +400,23 @@ def test_search_job_log(app, demo_job):
         run(app, operations.search_job_log, pattern='x', **dict(demo_job, job=cst.FAKE_JOBID))
     with pytest.raises(ToolError, match="Invalid job"):
         run(app, operations.search_job_log, pattern='x', **dict(demo_job, job='../../etc/passwd'))
+
+
+def test_search_job_log_whole_log(app, demo_job, monkeypatch):
+    with open(os.path.join(cst.ROOT_DIR, 'data', cst.DEMO_LOG), encoding='utf-8') as f:
+        expected = f.read().replace('\r\n', '\n').rstrip('\n')
+    result = run(app, operations.search_job_log, whole_log=True, pattern='ignored', **demo_job)
+    assert result['log'] == expected
+    assert result['lines_scanned'] == expected.count('\n') + 1 and 'matches' not in result
+
+    result = run(app, operations.search_job_log, whole_log=True, tail_mb=0.001, **demo_job)
+    assert expected.endswith(result['log']) and 'tail of the log' in result['notes'][0]
+
+    with pytest.raises(ToolError, match="Pass a pattern to search for, or whole_log=true"):
+        run(app, operations.search_job_log, **demo_job)
+    monkeypatch.setattr(operations, 'MAX_WHOLE_LOG_CHARS', 100)
+    with pytest.raises(ToolError, match="The log is over 100 characters by line .*, too big to return in one go"):
+        run(app, operations.search_job_log, whole_log=True, **demo_job)
 
 
 def test_search_job_log_with_catastrophic_regex(app, demo_job):
