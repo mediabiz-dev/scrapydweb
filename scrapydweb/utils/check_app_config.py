@@ -100,6 +100,7 @@ def check_app_config(config):
         logger.info("Setting up SCRAPY_PROJECTS_DIR: %s", handle_slash(SCRAPY_PROJECTS_DIR))
 
     # Scrapyd
+    check_assert('CHECK_SCRAPYD_SERVERS', True, bool)
     check_scrapyd_servers(config)
     # For JobsView
     for node, scrapyd_server in enumerate(config['SCRAPYD_SERVERS'], 1):
@@ -303,6 +304,28 @@ def check_app_config(config):
                                       trigger='interval', seconds=JOBS_SNAPSHOT_INTERVAL,
                                       misfire_grace_time=60, coalesce=True, max_instances=1, jobstore='memory'))
 
+    check_assert('CHECK_TASK_RESULT_INTERVAL', 300, int)
+    check_assert('KEEP_TASK_RESULT_LIMIT', 1000, int)
+    check_assert('KEEP_TASK_RESULT_WITHIN_DAYS', 31, int)
+    CHECK_TASK_RESULT_INTERVAL = config.get('CHECK_TASK_RESULT_INTERVAL', 300)
+    KEEP_TASK_RESULT_LIMIT = config.get('KEEP_TASK_RESULT_LIMIT', 1000)
+    KEEP_TASK_RESULT_WITHIN_DAYS = config.get('KEEP_TASK_RESULT_WITHIN_DAYS', 31)
+
+    logger.info('CHECK_TASK_RESULT_INTERVAL: %s' % CHECK_TASK_RESULT_INTERVAL)
+    logger.info('KEEP_TASK_RESULT_LIMIT: %s' % KEEP_TASK_RESULT_LIMIT)
+    logger.info('KEEP_TASK_RESULT_WITHIN_DAYS: %s' % KEEP_TASK_RESULT_WITHIN_DAYS)
+    if CHECK_TASK_RESULT_INTERVAL and (KEEP_TASK_RESULT_LIMIT or KEEP_TASK_RESULT_WITHIN_DAYS):
+        username = config.get('USERNAME', '')
+        password = config.get('PASSWORD', '')
+        kwargs = dict(
+            url=config['URL_SCRAPYDWEB'] + handle_metadata().get('url_delete_task_result',
+                                                                 '/1/tasks/xhr/delete/1/2/'),
+            auth=(username, password) if username and password else None,
+        )
+        logger.info(scheduler.add_job(id='delete_task_result', replace_existing=True,
+                                      func=delete_task_result, args=None, kwargs=kwargs,
+                                      trigger='interval', seconds=CHECK_TASK_RESULT_INTERVAL,
+                                      misfire_grace_time=60, coalesce=True, max_instances=1, jobstore='memory'))
     # Subprocess
     init_subprocess(config)
 
@@ -349,6 +372,17 @@ def check_mcp_config(config):
                     config['MCP_BIND'], config['MCP_PORT'], config['MCP_USERNAME'])
 
 
+def delete_task_result(url, auth):
+    url = re.sub(r'(\d+/)+$', '', url)
+    try:
+        r = session.post(url, auth=auth, timeout=60)
+        assert r.status_code == 200, "Request got status_code: %s" % r.status_code
+    except Exception as err:
+        print("Fail to delete task result: %s\n%s" % (url, err))
+    # else:
+    #     print('delete_task_result', url, r.status_code, r.json())
+
+
 def check_scrapyd_servers(config):
     SCRAPYD_SERVERS = config.get('SCRAPYD_SERVERS', []) or ['127.0.0.1:6800']
     SCRAPYD_SERVERS_PUBLIC_URLS = config.get('SCRAPYD_SERVERS_PUBLIC_URLS', None) or [''] * len(SCRAPYD_SERVERS)
@@ -371,7 +405,8 @@ def check_scrapyd_servers(config):
             continue
 
     servers = sorted(set(servers))
-    check_scrapyd_connectivity(servers)
+    if config.get('CHECK_SCRAPYD_SERVERS', True):
+        check_scrapyd_connectivity(servers)
 
     config['SCRAPYD_SERVER_OBJECTS'] = servers
     config['SCRAPYD_SERVERS'] = ['%s:%s' % (server.ip, server.port) for server in servers]
@@ -398,6 +433,7 @@ def check_scrapyd_connectivity(servers: List[ScrapydServer]):
                 server.name = f"{server.name}:{server.port}"
             return False
         else:
+            logger.debug("%s with auth %s got status_code %s" % (url, server.auth, r.status_code))
             return True
 
     # with ThreadPool(min(len(servers), 100)) as pool:  # Works in python 3.3 and up
