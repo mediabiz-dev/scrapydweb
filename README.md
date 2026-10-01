@@ -106,7 +106,7 @@ It requires Python >= 3.10, where the `mcp` package gets installed along with Sc
 | `list_jobs` | Lists the running, pending or finished jobs of the nodes, a page at a time. |
 | `stop_job` | Stops a pending or running job, like the Stop and ForceStop buttons of the Jobs page, optionally waiting for it to finish. |
 | `get_job_stats` | Gets the stats of a job, like the Stats page. |
-| `search_job_log` | Searches the log of a job for a text or regex, streaming it from the node, or returns the whole log. |
+| `search_job_log` | Searches the log of a job for a text or regex, streaming it from the node, or returns the link to the whole log, the same as the Source button. |
 | `get_job_items_link` | Gets the link to the items of a job, the same as the Items button of the Jobs page, and whether the file is there. |
 
 1. Set these in the config file. `MCP_USERNAME` and `MCP_PASSWORD` can also come from environment variables:
@@ -132,6 +132,7 @@ scrapydweb.example.com {
 }
 ```
 Set `MCP_ALLOWED_HOSTS = ['scrapydweb.example.com']` to reject requests for other hosts.
+Set `MCP_LINKS_WITH_AUTH = True` to embed the login of the Scrapyd server in the HTTPS links returned by `get_job_items_link` and by `search_job_log` with `whole_log`, so they open without a login prompt. The buttons of the Jobs page are unchanged. The login then shows up in the conversation with the agent.
 If the proxy checks basic auth too, it forwards the `Authorization` header, so use the same username and password for both.
 
 </details>
