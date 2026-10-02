@@ -1157,6 +1157,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "interval": "2m",
       "description": "Task results written per interval; a failed run is one where the job could not be started on some node",
       "gridPos": {
         "h": 8,
@@ -1171,6 +1172,7 @@
             "uid": "${datasource}"
           },
           "expr": "sum(increase(scrapydweb_timer_task_runs_total{task=~\"$task\"}[$__rate_interval]))",
+          "interval": "2m",
           "legendFormat": "runs",
           "refId": "A",
           "range": true,
@@ -1182,6 +1184,7 @@
             "uid": "${datasource}"
           },
           "expr": "sum(increase(scrapydweb_timer_task_failed_runs_total{task=~\"$task\"}[$__rate_interval]))",
+          "interval": "2m",
           "legendFormat": "runs failing on a node",
           "refId": "B",
           "range": true,
@@ -1501,6 +1504,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "interval": "2m",
       "description": "",
       "gridPos": {
         "h": 8,
@@ -1515,6 +1519,7 @@
             "uid": "${datasource}"
           },
           "expr": "sum by (endpoint) (rate(flask_http_request_duration_seconds_count[$__rate_interval]))",
+          "interval": "2m",
           "legendFormat": "{{endpoint}}",
           "refId": "A",
           "range": true,
@@ -1566,6 +1571,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "interval": "2m",
       "description": "",
       "gridPos": {
         "h": 8,
@@ -1580,6 +1586,7 @@
             "uid": "${datasource}"
           },
           "expr": "histogram_quantile(0.95, sum by (le, endpoint) (rate(flask_http_request_duration_seconds_bucket[$__rate_interval])))",
+          "interval": "2m",
           "legendFormat": "{{endpoint}}",
           "refId": "A",
           "range": true,
@@ -1631,6 +1638,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "interval": "2m",
       "description": "",
       "gridPos": {
         "h": 8,
@@ -1645,6 +1653,7 @@
             "uid": "${datasource}"
           },
           "expr": "sum by (status) (rate(flask_http_request_total[$__rate_interval]))",
+          "interval": "2m",
           "legendFormat": "{{status}}",
           "refId": "A",
           "range": true,
@@ -1656,6 +1665,7 @@
             "uid": "${datasource}"
           },
           "expr": "sum(rate(flask_http_request_exceptions_total[$__rate_interval]))",
+          "interval": "2m",
           "legendFormat": "exceptions",
           "refId": "B",
           "range": true,
@@ -1910,6 +1920,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "interval": "2m",
       "description": "Share of one CPU core",
       "gridPos": {
         "h": 4,
@@ -1924,6 +1935,7 @@
             "uid": "${datasource}"
           },
           "expr": "rate(process_cpu_seconds_total{job=~\"$job\"}[$__rate_interval])",
+          "interval": "2m",
           "legendFormat": "",
           "refId": "A",
           "range": false,
@@ -2181,6 +2193,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "interval": "2m",
       "description": "Share of one CPU core",
       "gridPos": {
         "h": 8,
@@ -2195,6 +2208,7 @@
             "uid": "${datasource}"
           },
           "expr": "rate(process_cpu_seconds_total{job=~\"$job\"}[$__rate_interval])",
+          "interval": "2m",
           "legendFormat": "cpu",
           "refId": "A",
           "range": true,
@@ -2243,6 +2257,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "interval": "2m",
       "description": "",
       "gridPos": {
         "h": 8,
@@ -2257,6 +2272,7 @@
             "uid": "${datasource}"
           },
           "expr": "sum by (generation) (rate(python_gc_collections_total{job=~\"$job\"}[$__rate_interval]))",
+          "interval": "2m",
           "legendFormat": "gen {{generation}}",
           "refId": "A",
           "range": true,
@@ -2318,6 +2334,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "interval": "2m",
       "description": "",
       "gridPos": {
         "h": 8,
@@ -2332,6 +2349,7 @@
             "uid": "${datasource}"
           },
           "expr": "sum by (status) (increase(scrapydweb_mcp_http_requests_total[$__rate_interval]))",
+          "interval": "2m",
           "legendFormat": "{{status}}",
           "refId": "A",
           "range": true,
@@ -2380,6 +2398,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "interval": "2m",
       "description": "",
       "gridPos": {
         "h": 8,
@@ -2394,6 +2413,7 @@
             "uid": "${datasource}"
           },
           "expr": "sum by (tool, status) (increase(scrapydweb_mcp_tool_calls_total[$__rate_interval]))",
+          "interval": "2m",
           "legendFormat": "{{tool}} {{status}}",
           "refId": "A",
           "range": true,
@@ -2442,6 +2462,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "interval": "2m",
       "description": "",
       "gridPos": {
         "h": 8,
@@ -2456,6 +2477,7 @@
             "uid": "${datasource}"
           },
           "expr": "histogram_quantile(0.95, sum by (le, tool) (rate(scrapydweb_mcp_tool_duration_seconds_bucket[$__rate_interval])))",
+          "interval": "2m",
           "legendFormat": "{{tool}}",
           "refId": "A",
           "range": true,
