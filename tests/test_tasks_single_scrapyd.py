@@ -5,9 +5,10 @@ REF: test_schedule_single_scrapyd.py
 import re
 
 from flask import url_for
-from six.moves.urllib.parse import unquote_plus
+from six.moves.urllib.parse import quote, unquote, unquote_plus
 from tzlocal import get_localzone
 
+from scrapydweb.utils.check_app_config import check_app_config
 from tests.utils import cst, req_single_scrapyd, sleep, upload_file_deploy
 
 
@@ -186,12 +187,14 @@ def test_run_with_task(app, client):
     __, js = req_single_scrapyd(app, client, view='tasks.xhr', kws=dict(node=NODE, action='dump', task_id=task_id))
     check_dumped_task_data(js)
     text, __ = req_single_scrapyd(app, client, view='tasks', kws=dict(node=NODE))
-    jobid = re.search(r'/(task_%s_[\w-]+?)/' % task_id, text).group(1)  # extract jobid from url_stats in tasks
+    # extract jobid from url_stats in tasks; since 72fc7a4 it is task_<task name>_<time>, URL-quoted in the page
+    jobid = unquote(re.search(r'/(task_%s_[\w-]+?)/' % re.escape(quote(NAME)), text).group(1))
     print("jobid: %s" % jobid)
     metadata['jobid'] = jobid
 
     ins = [
-        '%s.log' % jobid,
+        # The jobid contains the task name since 72fc7a4, and the log page HTML-escapes it
+        ('%s.log' % jobid).replace("'", '&#39;').replace('"', '&#34;'),
         'USER_AGENT: Mozilla/5.0 (iPhone',
         'ROBOTSTXT_OBEY: True',
         'COOKIES_ENABLED: False',
@@ -214,7 +217,8 @@ def test_check_tasks(app, client):
     task_id = metadata['task_id']
     jobid = metadata['jobid']
     with app.test_request_context():
-        metadata['url_stats'] = url_for('log', node=NODE, opt='stats',
+        # Links to job stats use the node name since 77dcc15
+        metadata['url_stats'] = url_for('log', node=app.config['SCRAPYD_SERVER_OBJECTS'][NODE - 1].name, opt='stats',
                                         project=cst.PROJECT, spider=cst.SPIDER, job=jobid)
         metadata['url_tasks'] = url_for('tasks', node=NODE)
         metadata['url_task_results'] = url_for('tasks', node=NODE, task_id=task_id)
@@ -250,10 +254,13 @@ def test_check_tasks(app, client):
 def test_check_task_results_with_job(app, client):
     task_id = metadata['task_id']
     metadata['server'] = app.config['SCRAPYD_SERVERS'][0]  # when fail: [node 1] 127.0.0.1:5000
+    # jobid contains the task name since 72fc7a4, and the task results pages escape its quotes for JS
+    # task_results_with_job.html renders task_results.items[0].node, gone since 77dcc15 renamed it to
+    # node_name, so the heading reads '[node ] 127.0.0.1:6800'
     text, __ = req_single_scrapyd(app, client, view='tasks', kws=dict(node=NODE, task_id=task_id),
-                                  ins=[TITLE, metadata['url_tasks'], '[node 1] %s' % metadata['server'],
+                                  ins=[TITLE, metadata['url_tasks'], '] %s' % metadata['server'],
                                        "status_code: 200,", "status: 'ok',", metadata['url_stats'],
-                                       "result: '%s'," % metadata['jobid'], ":total='1'"],
+                                       "result: '%s'," % metadata['jobid'].replace("'", "\\'"), ":total='1'"],
                                   nos=[metadata['url_task_results'], 'label="Pass count"', 'label="Server"'])
 
     # in the task results page: url_action: '/1/tasks/xhr/delete/5/10/',
@@ -282,7 +289,7 @@ def test_check_task_job_results(app, client):
                        ins=[TITLE, metadata['url_tasks'], metadata['url_task_results'],
                             'label="Server"', 'label="Node"', metadata['server'],
                             "status_code: 200,", "status: 'ok',", metadata['url_stats'],
-                            "result: '%s'," % metadata['jobid'], ":total='1'"],
+                            "result: '%s'," % metadata['jobid'].replace("'", "\\'"), ":total='1'"],
                        nos=metadata['url_delete_task_result'])
 
 
@@ -444,7 +451,8 @@ def test_edit_task(app, client):
         "replace_existing: 'True',",
         "action: 'add_fire',",
         "trigger: 'cron',",
-        u"name: '%s - edit'," % (NAME.replace("'", "\\'")),  # In HTML:  name: 'Chinese\' "中文 - edit',
+        # Copied tasks keep their name since 36ade42 (no " - edit" suffix)
+        u"name: '%s'," % (NAME.replace("'", "\\'")),  # In HTML:  name: 'Chinese\' "中文',
 
         "year: '2036',",
         "month: '12',",
@@ -844,7 +852,7 @@ def test_execute_task_fail(app, client):
                        ins=["status_code: -1,", "status: 'error',", "Max retries exceeded", ":total='1'"],
                        nos="node: %s," % NODE)
     req_single_scrapyd(app, client, view='tasks', kws=dict(node=NODE, task_id=task_id, task_result_id=task_result_id),
-                       ins=["node: %s," % NODE, "status_code: -1,", "status: 'error',",
+                       ins=["status_code: -1,", "status: 'error',",
                             "Max retries exceeded", ":total='1'"])
     req_single_scrapyd(app, client, view='tasks.xhr', kws=dict(node=NODE, action='delete', task_id=task_id))
 
@@ -852,6 +860,7 @@ def test_execute_task_fail(app, client):
 def test_history(app, client):
     task_id = metadata['task_id']
     next_run_time = metadata['next_run_time']
+    fake_node = app.config['SCRAPYD_SERVER_OBJECTS'][-1].name  # test_execute_task_fail() uses set_to_second
     req_single_scrapyd(app, client, view='tasks.history', kws=dict(),
                        ins=["timer_tasks_history.log",
                             "Add task #%s (%s) successfully" % (task_id, NAME),
@@ -861,9 +870,19 @@ def test_history(app, client):
                             '"name": "%s",' % (NAME.replace('"', '\\"')),  # "name": "Chinese' \"中文",
                             '"next_run_time": "datetime.datetime(',
                             '"trigger": "<CronTrigger',
-                            "Fail to execute task #%s (%s) on node 1, would retry later" % (task_id, NAME),
+                            # Tasks log the node name instead of the node number since 77dcc15
+                            "Fail to execute task #%s (%s) on node %s, would retry later" % (task_id, NAME, fake_node),
                             "Max retries exceeded",
-                            "Fail to execute task #%s (%s) on node 1, no more retries" % (task_id, NAME),
+                            "Fail to execute task #%s (%s) on node %s, no more retries" % (task_id, NAME, fake_node),
                             "assert js['status_code'] == 200 and js['status'] == 'ok'",
                             "Task #%s deleted" % task_id,
                             ])
+
+def test_check_task_result_interval(app, client):
+    app.config['ENABLE_MONITOR'] = False
+    app.config['CHECK_TASK_RESULT_INTERVAL'] = 5
+    app.config['SCRAPYD_SERVERS'] = app.config['_SCRAPYD_SERVERS']
+    check_app_config(app.config)
+    sleep(8)
+    __, js = req_single_scrapyd(app, client, view='tasks.xhr', kws=dict(node=NODE, action='delete'))
+    print("test_check_task_result_interval: %s" % js)

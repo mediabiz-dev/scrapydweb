@@ -37,6 +37,33 @@ project = projectname
 folder_project_dict = {}
 
 
+def get_modification_time(path, func_walk=os.walk):
+    # https://stackoverflow.com/a/29685234/10517783
+    # https://stackoverflow.com/a/13454267/10517783
+    filepath_list = []
+    in_top_dir = True
+    for dirpath, dirnames, filenames in func_walk(path):
+        if in_top_dir:
+            in_top_dir = False
+            dirnames[:] = [d for d in dirnames if d not in ['build', 'project.egg-info']]
+            filenames = [f for f in filenames
+                         if not (f.endswith('.egg') or f in ['setup.py', 'setup_backup.py'])]
+        for filename in filenames:
+            filepath_list.append(os.path.join(dirpath, filename))
+    try:
+        return max([os.path.getmtime(f) for f in filepath_list])
+    except:
+        return time.time()
+
+
+def run_pre_deploy_hook(project_path, project, version, timeout=None):
+    project_path = Path(project_path)
+    hook = (project_path / 'pre_deploy_hook')
+    if hook.exists():
+        subprocess.call(str(hook), shell=True, env={"SCRAPY_VERSION": version, "SCRAPY_PROJECT": project},
+                        cwd=project_path, timeout=timeout)
+
+
 class DeployView(BaseView):
 
     def __init__(self):
@@ -117,19 +144,8 @@ class DeployView(BaseView):
             self.logger.debug('latest_folder: %s', self.latest_folder)
 
     def get_modification_time(self, path, func_walk=os.walk, retry=True):
-        # https://stackoverflow.com/a/29685234/10517783
-        # https://stackoverflow.com/a/13454267/10517783
-        filepath_list = []
-        in_top_dir = True
         try:
-            for dirpath, dirnames, filenames in func_walk(path):
-                if in_top_dir:
-                    in_top_dir = False
-                    dirnames[:] = [d for d in dirnames if d not in ['build', 'project.egg-info']]
-                    filenames = [f for f in filenames
-                                 if not (f.endswith('.egg') or f in ['setup.py', 'setup_backup.py'])]
-                for filename in filenames:
-                    filepath_list.append(os.path.join(dirpath, filename))
+            return get_modification_time(path, func_walk=func_walk)
         except UnicodeDecodeError:
             msg = "Found illegal filenames in %s" % path
             self.logger.error(msg)
@@ -138,11 +154,6 @@ class DeployView(BaseView):
                 return self.get_modification_time(path, func_walk=self.safe_walk, retry=False)
             else:
                 raise
-        else:
-            try:
-                return max([os.path.getmtime(f) for f in filepath_list])
-            except:
-                return time.time()
 
     def parse_scrapy_cfg(self):
         for (idx, scrapy_cfg) in enumerate(self.scrapy_cfg_list):
@@ -444,10 +455,7 @@ class DeployUploadView(BaseView):
         self.slot.add_egg(self.eggname, content)
 
     def pre_package_hook(self, project_path):
-        project_path = Path(project_path)
-        hook = (project_path / 'pre_deploy_hook')
-        if hook.exists():
-            subprocess.call(str(hook), shell=True, env={"SCRAPY_VERSION": self.version, "SCRAPY_PROJECT": self.project}, cwd=project_path)
+        run_pre_deploy_hook(project_path, self.project, self.version)
 
 
 class DeployXhrView(BaseView):

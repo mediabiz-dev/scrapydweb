@@ -36,11 +36,14 @@ def test_log_utf8_stats(app, client):
             ins='log - ScrapydWeb')
 
         # the Jobs page GET
+        # Since 7f811c0 ("forcestop on 1st click") the Stop button of the classic Jobs page sends a forcestop,
+        # while the database style still links to stop
+        url_stop_classic = url_for('api', node=1, opt='forcestop', project=cst.PROJECT, version_spider_job=jobid)
         url_stop = url_for('api', node=1, opt='stop', project=cst.PROJECT, version_spider_job=jobid)
         url_jobs_classic = url_for('jobs', node=1, style='classic')
         url_jobs_database = url_for('jobs', node=1, style='database')
         req(app, client, view='jobs', kws=dict(node=1, style='classic'),
-            ins=[url_stop, url_jobs_database, 'class="table wrap"'], nos="Vue.extend(Main)")
+            ins=[url_stop_classic, url_jobs_database, 'class="table wrap"'], nos="Vue.extend(Main)")
         req(app, client, view='jobs', kws=dict(node=1, style='database'),
             ins=[url_stop, url_jobs_classic, "Vue.extend(Main)"], nos='class="table wrap"')
 
@@ -52,10 +55,10 @@ def test_log_utf8_stats(app, client):
         req(app, client, view='metadata', kws=dict(node=1), jskws=dict(jobs_style='database'))
 
         req(app, client, view='jobs', kws=dict(node=1, raise_exception='True'),
-            ins=[url_stop, url_jobs_database, 'class="table wrap"'], nos="Vue.extend(Main)")
+            ins=[url_stop_classic, url_jobs_database, 'class="table wrap"'], nos="Vue.extend(Main)")
         req(app, client, view='metadata', kws=dict(node=1), jskws=dict(jobs_style='classic'))
         req(app, client, view='jobs', kws=dict(node=1),
-            ins=[url_stop, url_jobs_database, 'class="table wrap"'], nos="Vue.extend(Main)")
+            ins=[url_stop_classic, url_jobs_database, 'class="table wrap"'], nos="Vue.extend(Main)")
 
         # jobs POST data={}
         jobs_key = '%s/%s/%s' % (cst.PROJECT, cst.SPIDER, jobid)  # type unicode in Python 2
@@ -81,7 +84,8 @@ def test_log_utf8_stats(app, client):
         # /1/schedule/ScrapydWeb_demo/default:%20the%20latest%20version/test/   NOT unique
         url_start = url_for('schedule', node=1, project=cst.PROJECT,
                             version=cst.DEFAULT_LATEST_VERSION, spider=cst.SPIDER)
-        req(app, client, view='jobs', kws=dict(node=1, style='classic'), ins=url_start)
+        # The Start button of finished jobs was removed from the classic style in 3292174
+        req(app, client, view='jobs', kws=dict(node=1, style='classic'), nos=url_start)
         req(app, client, view='jobs', kws=dict(node=1, style='database'), ins=url_start)
 
         # JobsXhrView delete finished

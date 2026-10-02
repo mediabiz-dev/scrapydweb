@@ -1,5 +1,6 @@
 # coding: utf-8
 import dataclasses
+import importlib.util
 import logging
 from multiprocessing.dummy import Pool as ThreadPool
 import os
@@ -82,6 +83,8 @@ def check_app_config(config):
             assert os.path.isfile(config[k]), "%s not found: %s" % (k, config[k])
         logger.info("Running in HTTPS mode: %s, %s", config['CERTIFICATE_FILEPATH'], config['PRIVATEKEY_FILEPATH'])
 
+    check_mcp_config(config)
+
     _protocol = 'https' if config.get('ENABLE_HTTPS', False) else 'http'
     _bind = config.get('SCRAPYDWEB_BIND', '0.0.0.0')
     _bind = '127.0.0.1' if _bind == '0.0.0.0' else _bind
@@ -97,6 +100,7 @@ def check_app_config(config):
         logger.info("Setting up SCRAPY_PROJECTS_DIR: %s", handle_slash(SCRAPY_PROJECTS_DIR))
 
     # Scrapyd
+    check_assert('CHECK_SCRAPYD_SERVERS', True, bool)
     check_scrapyd_servers(config)
     # For JobsView
     for node, scrapyd_server in enumerate(config['SCRAPYD_SERVERS'], 1):
@@ -300,6 +304,28 @@ def check_app_config(config):
                                       trigger='interval', seconds=JOBS_SNAPSHOT_INTERVAL,
                                       misfire_grace_time=60, coalesce=True, max_instances=1, jobstore='memory'))
 
+    check_assert('CHECK_TASK_RESULT_INTERVAL', 300, int)
+    check_assert('KEEP_TASK_RESULT_LIMIT', 1000, int)
+    check_assert('KEEP_TASK_RESULT_WITHIN_DAYS', 31, int)
+    CHECK_TASK_RESULT_INTERVAL = config.get('CHECK_TASK_RESULT_INTERVAL', 300)
+    KEEP_TASK_RESULT_LIMIT = config.get('KEEP_TASK_RESULT_LIMIT', 1000)
+    KEEP_TASK_RESULT_WITHIN_DAYS = config.get('KEEP_TASK_RESULT_WITHIN_DAYS', 31)
+
+    logger.info('CHECK_TASK_RESULT_INTERVAL: %s' % CHECK_TASK_RESULT_INTERVAL)
+    logger.info('KEEP_TASK_RESULT_LIMIT: %s' % KEEP_TASK_RESULT_LIMIT)
+    logger.info('KEEP_TASK_RESULT_WITHIN_DAYS: %s' % KEEP_TASK_RESULT_WITHIN_DAYS)
+    if CHECK_TASK_RESULT_INTERVAL and (KEEP_TASK_RESULT_LIMIT or KEEP_TASK_RESULT_WITHIN_DAYS):
+        username = config.get('USERNAME', '')
+        password = config.get('PASSWORD', '')
+        kwargs = dict(
+            url=config['URL_SCRAPYDWEB'] + handle_metadata().get('url_delete_task_result',
+                                                                 '/1/tasks/xhr/delete/1/2/'),
+            auth=(username, password) if username and password else None,
+        )
+        logger.info(scheduler.add_job(id='delete_task_result', replace_existing=True,
+                                      func=delete_task_result, args=None, kwargs=kwargs,
+                                      trigger='interval', seconds=CHECK_TASK_RESULT_INTERVAL,
+                                      misfire_grace_time=60, coalesce=True, max_instances=1, jobstore='memory'))
     # Subprocess
     init_subprocess(config)
 
@@ -314,6 +340,47 @@ def create_jobs_snapshot(url_jobs, auth, nodes):
             print("Fail to create jobs snapshot: %s\n%s" % (url_jobs, err))
         # else:
         #     print(url_jobs, r.status_code)
+
+
+def check_mcp_config(config):
+    if not config.get('ENABLE_MCP', False):
+        return
+    try:
+        assert config['ENABLE_MCP'] is True, "ENABLE_MCP should be True or False"
+        assert importlib.util.find_spec('mcp') is not None, \
+            "ENABLE_MCP requires Python >= 3.10 and the mcp package: pip install 'mcp>=2.2.0,<3'"
+        config.setdefault('MCP_BIND', '0.0.0.0')
+        config.setdefault('MCP_PORT', 5001)
+        assert isinstance(config['MCP_BIND'], str) and config['MCP_BIND'], "MCP_BIND should be a non-empty string"
+        port = config['MCP_PORT']
+        assert isinstance(port, int) and not isinstance(port, bool) and 0 < port < 65536, \
+            "MCP_PORT should be a port number. Current value: %s" % port
+        assert str(port) != str(config.get('SCRAPYDWEB_PORT', 5000)), "MCP_PORT should differ from SCRAPYDWEB_PORT"
+        for key in ['MCP_USERNAME', 'MCP_PASSWORD']:
+            assert isinstance(config.get(key), str) and config[key], "%s should be a non-empty string" % key
+        assert isinstance(config.setdefault('MCP_LINKS_WITH_AUTH', False), bool), \
+            "MCP_LINKS_WITH_AUTH should be True or False"
+        for key in ['MCP_ALLOWED_HOSTS', 'MCP_ALLOWED_ORIGINS']:
+            value = config.setdefault(key, [])
+            assert isinstance(value, list) and all(isinstance(i, str) for i in value), \
+                "%s should be a list of strings" % key
+    except AssertionError as err:
+        config['ENABLE_MCP'] = False
+        logger.error("MCP server disabled: %s", err)
+    else:
+        logger.info("MCP server enabled on %s:%s with basic auth for MCP_USERNAME '%s'",
+                    config['MCP_BIND'], config['MCP_PORT'], config['MCP_USERNAME'])
+
+
+def delete_task_result(url, auth):
+    url = re.sub(r'(\d+/)+$', '', url)
+    try:
+        r = session.post(url, auth=auth, timeout=60)
+        assert r.status_code == 200, "Request got status_code: %s" % r.status_code
+    except Exception as err:
+        print("Fail to delete task result: %s\n%s" % (url, err))
+    # else:
+    #     print('delete_task_result', url, r.status_code, r.json())
 
 
 def check_scrapyd_servers(config):
@@ -338,7 +405,8 @@ def check_scrapyd_servers(config):
             continue
 
     servers = sorted(set(servers))
-    check_scrapyd_connectivity(servers)
+    if config.get('CHECK_SCRAPYD_SERVERS', True):
+        check_scrapyd_connectivity(servers)
 
     config['SCRAPYD_SERVER_OBJECTS'] = servers
     config['SCRAPYD_SERVERS'] = ['%s:%s' % (server.ip, server.port) for server in servers]
@@ -365,6 +433,7 @@ def check_scrapyd_connectivity(servers: List[ScrapydServer]):
                 server.name = f"{server.name}:{server.port}"
             return False
         else:
+            logger.debug("%s with auth %s got status_code %s" % (url, server.auth, r.status_code))
             return True
 
     # with ThreadPool(min(len(servers), 100)) as pool:  # Works in python 3.3 and up

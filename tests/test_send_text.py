@@ -100,10 +100,13 @@ def test_email_fail(app, client):
         # Chances are that the email may be sent successfully.
         pass
 
-    # EMAIL_PASSWORD unset
+    # EMAIL_PASSWORD unset: since ad97deb the email is still sent, just without SMTP login
+    # (e.g. via a local postfix), so there is no "option is unset" short-circuit any more.
+    # Whether the unauthenticated send succeeds depends on the SMTP server.
     app.config['EMAIL_PASSWORD'] = ''
-    req(app, client, view='sendtextapi', kws=dict(opt='email'),
-        jskws=dict(status=cst.ERROR, result="The EMAIL_PASSWORD option is unset"))
+    __, js = req(app, client, view='sendtextapi', kws=dict(opt='email'),
+                 jskeys=['status', 'result', 'when'], nos="The EMAIL_PASSWORD option is unset")
+    assert js['status'] in [cst.OK, cst.ERROR]
 
     # EMAIL_PASSWORD invalid
     # "reason": "Error: 请使用授权码登录。详情请看: http://service.mail.qq.com/cgi-bin/help?subtype=1&&id=28&&no=1001256"

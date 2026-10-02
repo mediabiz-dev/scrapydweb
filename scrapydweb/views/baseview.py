@@ -17,13 +17,17 @@ from ..servers import find_by_name, ScrapydServer
 from ..vars import (ALLOWED_SCRAPYD_LOG_EXTENSIONS, APSCHEDULER_DATABASE_URI,
                     DATA_PATH, DEMO_PROJECTS_PATH, DEPLOY_PATH, PARSE_PATH,
                     ALERT_TRIGGER_KEYS, LEGAL_NAME_PATTERN, SCHEDULE_ADDITIONAL,
-                    SCHEDULE_PATH, STATE_PAUSED, STATE_RUNNING, STATS_PATH, STRICT_NAME_PATTERN)
-from ..utils.scheduler import scheduler
+                    SCHEDULE_PATH, STATE_PAUSED, STATE_RUNNING, STATS_PATH, STRICT_NAME_PATTERN,
+                    PYTHON_VERSION, SCRAPY_VERSION, SCRAPYD_VERSION)
+from ..utils.scheduler import jobstores, scheduler
 
 
 class BaseView(View):
+    PYTHON_VERSION = PYTHON_VERSION
     SCRAPYDWEB_VERSION = SCRAPYDWEB_VERSION
     LOGPARSER_VERSION = LOGPARSER_VERSION
+    SCRAPY_VERSION = SCRAPY_VERSION
+    SCRAPYD_VERSION = SCRAPYD_VERSION
 
     DEMO_PROJECTS_PATH = DEMO_PROJECTS_PATH
     DEPLOY_PATH = DEPLOY_PATH
@@ -102,6 +106,7 @@ class BaseView(View):
         self.SCRAPYD_SERVERS_PUBLIC_URLS = (app.config.get('SCRAPYD_SERVERS_PUBLIC_URLS', None)
                                             or [''] * self.SCRAPYD_SERVERS_AMOUNT)
 
+        self.CHECK_SCRAPYD_SERVERS = app.config.get('CHECK_SCRAPYD_SERVERS', True)
         self.LOCAL_SCRAPYD_SERVER = app.config.get('LOCAL_SCRAPYD_SERVER', '')
         self.LOCAL_SCRAPYD_LOGS_DIR = app.config.get('LOCAL_SCRAPYD_LOGS_DIR', '')
         self.SCRAPYD_LOG_EXTENSIONS = (app.config.get('SCRAPYD_LOG_EXTENSIONS', [])
@@ -114,6 +119,9 @@ class BaseView(View):
         # Timer Tasks
         self.scheduler = scheduler
         self.JOBS_SNAPSHOT_INTERVAL = app.config.get('JOBS_SNAPSHOT_INTERVAL', 300)
+        self.CHECK_TASK_RESULT_INTERVAL = app.config.get('CHECK_TASK_RESULT_INTERVAL', 300)
+        self.KEEP_TASK_RESULT_LIMIT = app.config.get('KEEP_TASK_RESULT_LIMIT', 1000)
+        self.KEEP_TASK_RESULT_WITHIN_DAYS = app.config.get('KEEP_TASK_RESULT_WITHIN_DAYS', 31)
 
         # Run Spider
         self.SCHEDULE_EXPAND_SETTINGS_ARGUMENTS = app.config.get('SCHEDULE_EXPAND_SETTINGS_ARGUMENTS', False)
@@ -229,8 +237,7 @@ class BaseView(View):
         self.FEATURES += 'P' if self.IS_MOBILE else '-'
         self.FEATURES += 'M' if self.USE_MOBILEUI else '-'
         self.FEATURES += 'S' if self.ENABLE_HTTPS else '-'
-        self.any_running_apscheduler_jobs = any(job.next_run_time
-                                                for job in self.scheduler.get_jobs(jobstore='default'))
+        self.any_running_apscheduler_jobs = jobstores['default'].get_next_run_time() is not None
         if self.scheduler.state == STATE_PAUSED:
             self.FEATURES += '-'
         elif self.any_running_apscheduler_jobs:
@@ -341,11 +348,12 @@ class BaseView(View):
                         self.logger.error("!!!!! (%s) %s: %s", r.status_code, status, url)
                     else:
                         self.logger.debug("<<<<< (%s) %s: %s", r.status_code, status, url)
-                    if dumps_json:
-                        self.logger.debug("Got json from %s: %s", url, self.json_dumps(r_json))
-                    else:
-                        self.logger.debug("Got keys from (%s) %s %s: %s",
-                                          r_json.get('status_code'), r_json.get('status'), url, r_json.keys())
+                    if self.logger.isEnabledFor(logging.DEBUG):
+                        if dumps_json:
+                            self.logger.debug("Got json from %s: %s", url, self.json_dumps(r_json))
+                        else:
+                            self.logger.debug("Got keys from (%s) %s %s: %s",
+                                              r_json.get('status_code'), r_json.get('status'), url, r_json.keys())
 
                     return r.status_code, r_json
             else:

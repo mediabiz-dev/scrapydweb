@@ -89,6 +89,99 @@ The latest version of Google Chrome, Firefox, and Safari.
 </details>
 
 
+## :robot: MCP Server
+<details>
+<summary>View contents</summary>
+
+ScrapydWeb can serve an [MCP](https://modelcontextprotocol.io) endpoint, so that MCP clients like Claude Code can manage the cluster.
+It requires Python >= 3.10, where the `mcp` package gets installed along with ScrapydWeb.
+
+| Tool | What it does |
+|---|---|
+| `list_nodes` | Lists the Scrapyd nodes. The other tools take a node by its name or 1-based index. |
+| `list_deployable_projects` | Lists the projects in `SCRAPY_PROJECTS_DIR`. |
+| `deploy_project` | Packages a project in `SCRAPY_PROJECTS_DIR` on the ScrapydWeb server, like Auto packaging in the Deploy page, and adds it to all or some nodes. |
+| `list_timer_tasks` | Lists the timer tasks with their state and last run, a page at a time. |
+| `fire_timer_task` | Fires a timer task now, optionally waiting for the jobs it starts. |
+| `list_jobs` | Lists the running, pending or finished jobs of the nodes, a page at a time. |
+| `stop_job` | Stops a pending or running job, like the Stop and ForceStop buttons of the Jobs page, optionally waiting for it to finish. |
+| `get_job_stats` | Gets the stats of a job, like the Stats page. |
+| `search_job_log` | Searches the log of a job for a text or regex, streaming it from the node, or returns the link to the whole log, the same as the Source button. |
+| `get_job_items_link` | Gets the link to the items of a job, the same as the Items button of the Jobs page, and whether the file is there. |
+
+1. Set these in the config file. `MCP_USERNAME` and `MCP_PASSWORD` can also come from environment variables:
+```python
+ENABLE_MCP = True
+MCP_PORT = 5001  # The endpoint is http://MCP_BIND:MCP_PORT/mcp
+MCP_USERNAME = 'username'  # The MCP server always requires basic auth
+MCP_PASSWORD = 'password'
+```
+2. Add it to your MCP client, e.g. Claude Code:
+```bash
+claude mcp add --transport http scrapydweb https://scrapydweb.example.com/mcp \
+    --header "Authorization: Basic $(printf 'username:password' | base64)"
+```
+3. Optionally, copy [skills/scrapydweb-mcp](skills/scrapydweb-mcp) into your agent's skills folder (e.g. `~/.claude/skills/`): it teaches the agent how to chain the tools and read their results.
+:heavy_exclamation_mark: Basic auth sends the password in every request, so serve the endpoint over HTTPS, e.g. behind a reverse proxy like Caddy:
+```
+scrapydweb.example.com {
+    handle /mcp* {
+        reverse_proxy scrapydweb:5001
+    }
+    reverse_proxy scrapydweb:5000
+}
+```
+Set `MCP_ALLOWED_HOSTS = ['scrapydweb.example.com']` to reject requests for other hosts.
+Set `MCP_LINKS_WITH_AUTH = True` to embed the login of the Scrapyd server in the HTTPS links returned by `get_job_items_link` and by `search_job_log` with `whole_log`, so they open without a login prompt. The buttons of the Jobs page are unchanged. The login then shows up in the conversation with the agent.
+If the proxy checks basic auth too, it forwards the `Authorization` header, so use the same username and password for both.
+
+</details>
+
+
+## :bar_chart: Prometheus Metrics
+<details>
+<summary>View contents</summary>
+
+Set `ENABLE_METRICS = True` in the config file to serve [Prometheus](https://prometheus.io) metrics at `/metrics` on `SCRAPYDWEB_PORT`.
+The HTTP metrics come from [prometheus_flask_exporter](https://github.com/rycus86/prometheus_flask_exporter), which labels the requests by endpoint instead of path, since the paths contain the names of projects, spiders and jobs.
+The other metrics are collected on each scrape:
+
+| Metric | Labels | What it is |
+|---|---|---|
+| `flask_http_request_duration_seconds` | `method`, `endpoint`, `status` | Histogram of the HTTP requests to ScrapydWeb |
+| `flask_http_request_total` | `method`, `status` | HTTP requests to ScrapydWeb |
+| `scrapydweb_info` | `version` | The version of ScrapydWeb |
+| `scrapydweb_scrapyd_up` | `node`, `group` | Whether the Scrapyd server answers `daemonstatus.json`, within 5 seconds |
+| `scrapydweb_scrapyd_jobs` | `node`, `group`, `state` | Pending, running and finished jobs of the Scrapyd server |
+| `scrapydweb_scheduler_running` | | Whether the scheduler of timer tasks is running |
+| `scrapydweb_timer_tasks` | `state` | Scheduled, paused and finished timer tasks |
+| `scrapydweb_timer_task_runs_total` | `task_id`, `task` | Runs of the timer task |
+| `scrapydweb_timer_task_failed_runs_total` | `task_id`, `task` | Runs of the timer task that fail to run the job on some node |
+| `scrapydweb_timer_task_last_run_timestamp_seconds` | `task_id`, `task` | When the timer task ran last time |
+| `scrapydweb_mcp_http_requests_total` | `status` | HTTP requests to the MCP server, including the ones rejected by its basic auth |
+| `scrapydweb_mcp_tool_calls_total` | `tool`, `status` | Calls of the MCP tool, `status` is `ok` or `error` |
+| `scrapydweb_mcp_tool_duration_seconds` | `tool` | Histogram of the calls of the MCP tool |
+
+The metrics of the MCP server are there only if `ENABLE_MCP` is True as well, and they are served at `/metrics` of ScrapydWeb too, not on `MCP_PORT`.
+
+[grafana/scrapydweb.json](grafana/scrapydweb.json) is a Grafana dashboard of these metrics: the Scrapyd nodes and their jobs, the timer tasks and their failing runs, the HTTP requests, the memory and CPU of the ScrapydWeb process, and the MCP server.
+Import it in Grafana and pick the Prometheus data source and the scrape job of ScrapydWeb.
+
+If `ENABLE_AUTH` is True, or a reverse proxy checks basic auth, add the credentials to the scrape config:
+```yaml
+scrape_configs:
+  - job_name: scrapydweb
+    scheme: https
+    static_configs:
+      - targets: ['scrapydweb.example.com']
+    basic_auth:
+      username: username
+      password: password
+```
+
+</details>
+
+
 ## :heavy_check_mark: Running the tests
 <details>
 <summary>View contents</summary>

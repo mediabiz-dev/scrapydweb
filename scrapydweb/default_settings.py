@@ -54,6 +54,8 @@ SCRAPYD_SERVERS = [
     ScrapydServer("scrapyd-local", "127.0.0.1", 6800, group="Local"),
 ]
 
+# The default is True, set it to False to skip checking connectivity of scrapyd at startup.
+CHECK_SCRAPYD_SERVERS = True
 
 # It's recommended to update the three options below
 # if both ScrapydWeb and one of your Scrapyd servers run on the same machine.
@@ -120,7 +122,7 @@ SCRAPYD_SERVERS_PUBLIC_URLS = None
 ############################## LogParser ######################################
 # Whether to backup the stats json files locally after you visit the Stats page of a job
 # so that it is still accessible even if the original logfile has been deleted.
-# The default is True, set it to False to disable this behaviour.
+# The default is True, set it to False to disable this behavior.
 BACKUP_STATS_JSON_FILE = True
 
 
@@ -130,9 +132,26 @@ BACKUP_STATS_JSON_FILE = True
 
 # The default is 300, which means ScrapydWeb would automatically create a snapshot of the Jobs page
 # and save the jobs info in the database in the background every 300 seconds.
-# Note that this behaviour would be paused if the scheduler for timer tasks is disabled.
-# Set it to 0 to disable this behaviour.
+# Note that this behavior would be paused if the scheduler for timer tasks is disabled.
+# Set it to 0 to disable this behavior.
 JOBS_SNAPSHOT_INTERVAL = 300
+
+
+# The default is 300, which means ScrapydWeb would automatically check the amount of task results of all timer tasks
+# in the background every 300 seconds to delete some outdated records in the database.
+# This option works only when either KEEP_TASK_RESULT_LIMIT or KEEP_TASK_RESULT_WITHIN_DAYS is not 0.
+# Note that this behavior would be paused if the scheduler for timer tasks is disabled.
+# Set it to 0 to disable this behavior.
+CHECK_TASK_RESULT_INTERVAL = 300
+
+# The default is 1000, which means only the latest 1000 timer task results would not be deleted from the database.
+# See also CHECK_TASK_RESULT_INTERVAL. Set it to 0 to disable this behavior.
+KEEP_TASK_RESULT_LIMIT = 1000
+
+# The default is 31, which means only the timer task results executed within recent 31 days
+# would not be deleted from the database.
+# See also CHECK_TASK_RESULT_INTERVAL. Set it to 0 to disable this behavior.
+KEEP_TASK_RESULT_WITHIN_DAYS = 31
 
 
 ############################## Run Spider #####################################
@@ -343,6 +362,38 @@ LOG_RETRY_TRIGGER_FORCESTOP = False
 LOG_IGNORE_THRESHOLD = 0
 LOG_IGNORE_TRIGGER_STOP = False
 LOG_IGNORE_TRIGGER_FORCESTOP = False
+
+
+############################## MCP Server #####################################
+# The default is False, set it to True to serve an MCP (Model Context Protocol) endpoint at
+# http://MCP_BIND:MCP_PORT/mcp, so that MCP clients like Claude Code could deploy projects,
+# fire timer tasks, list jobs, and read the stats, logs and links to the items of jobs.
+# Note that it requires Python >= 3.10 and the mcp package: pip install 'mcp>=2.2.0,<3'
+ENABLE_MCP = False
+MCP_BIND = '0.0.0.0'
+# Accept connections on the specified port, the default is 5001, which should differ from SCRAPYDWEB_PORT.
+MCP_PORT = 5001
+# The MCP server always requires basic auth, both MCP_USERNAME and MCP_PASSWORD should be non-empty strings.
+MCP_USERNAME = os.environ.get('MCP_USERNAME', '')
+MCP_PASSWORD = os.environ.get('MCP_PASSWORD', '')
+# The default is [], set it to the Host header values (e.g. ['scrapydweb.example.com']) and Origin header
+# values (e.g. ['https://scrapydweb.example.com']) the MCP server should accept, to guard against DNS rebinding.
+MCP_ALLOWED_HOSTS = []
+MCP_ALLOWED_ORIGINS = []
+# The default is False, set it to True to embed the username and password of the Scrapyd server in the links
+# returned by get_job_items_link and search_job_log with whole_log,
+# e.g. https://username:password@scrapyd.example.com/..., so that they open without a login prompt.
+# Only for HTTPS links, never for the buttons of the Jobs page.
+# Note that the login then shows up in the conversation with the agent, and it grants the whole Scrapyd API.
+MCP_LINKS_WITH_AUTH = False
+
+
+############################## Prometheus Metrics #############################
+# The default is False, set it to True to serve Prometheus metrics at /metrics on SCRAPYDWEB_PORT:
+# the HTTP requests to ScrapydWeb, whether each Scrapyd server is up along with its jobs, the runs of
+# the timer tasks, and the requests and tool calls of the MCP server if ENABLE_MCP is True.
+# Note that /metrics requires basic auth as well if ENABLE_AUTH is True.
+ENABLE_METRICS = False
 
 
 ############################## System #########################################

@@ -304,6 +304,8 @@ var Main = {
 
     created() {
       for (let row of this.tableData) {
+          if (row.url_prev_run_result.indexOf("/stats/") == -1)
+            continue;
           fetch(row.url_prev_run_result.replace("/stats/", "/report/")).then(resp => {
               if (resp.status == 200)
                 return resp.json()

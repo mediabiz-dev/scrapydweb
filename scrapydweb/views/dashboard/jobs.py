@@ -7,7 +7,7 @@ import traceback
 from flask import flash, get_flashed_messages, render_template, request, url_for
 from six.moves.urllib.parse import urljoin
 
-from ...common import handle_metadata
+from ...common import chunks, handle_metadata
 from ...models import create_jobs_table, db
 from ...vars import STRICT_NAME_PATTERN, jobs_table_map
 from ..baseview import BaseView
@@ -43,6 +43,18 @@ JOB_PATTERN = re.compile(r"""
                             </tr>
                           """, re.X)
 JOB_KEYS = ['project', 'spider', 'job', 'pid', 'start', 'runtime', 'finish', 'href_log', 'href_items']
+
+
+def get_items_href(spider, job, start, finished):
+    country_code = re.search(r"_(\D{2})_", job) if job else None
+    country_code = country_code.group(1) if country_code else ''
+    start_time = datetime.strptime(start, '%Y-%m-%d %H:%M:%S') if start else None
+    start_time = start_time.strftime('%Y%m%d-%H-%M') if start_time else ''
+    filename = spider + "_" + country_code + "_" + start_time + ".csv"
+    if finished:
+        return '/items/archive/{}/{}/{}.zip'.format(spider, country_code, filename)
+    else:
+        return '/items/single_sites/{}'.format(filename)
 
 
 class JobsView(BaseView):
@@ -249,8 +261,12 @@ class JobsView(BaseView):
 
     def db_insert_jobs(self):
         records = []
+        existing_records = {}
+        for chunk in chunks(set(job['job'] for job in self.jobs)):
+            for record in self.Job.query.filter(self.Job.job.in_(chunk)):
+                existing_records[(record.project, record.spider, record.job)] = record
         for job in self.jobs:  # set(self.jobs): unhashable type: 'dict'
-            record = self.Job.query.filter_by(project=job['project'], spider=job['spider'], job=job['job']).first()
+            record = existing_records.get((job['project'], job['spider'], job['job']))
             if record:
                 self.logger.debug("Found job in database: %s", record)
                 if record.deleted == DELETED:
@@ -274,15 +290,7 @@ class JobsView(BaseView):
                     m = re.search(HREF_PATTERN, v) if v else None
                     v = m.group(1) if m else v
                 elif k in ['href_items']:
-                    country_code = re.search("_(\D{2})_",job["job"]) if job["job"] else None
-                    country_code = country_code.group(1) if country_code else ''
-                    start_time = datetime.strptime(job["start"], '%Y-%m-%d %H:%M:%S') if job["start"] else None
-                    start_time = start_time.strftime('%Y%m%d-%H-%M') if start_time else ''
-                    filename = job["spider"] + "_" + country_code + "_" + start_time + ".csv"
-                    if job['finish']:
-                        v ='/items/archive/{}/{}/{}.zip'.format(job["spider"], country_code, filename)
-                    else:
-                        v = '/items/single_sites/{}'.format(filename)
+                    v = get_items_href(job['spider'], job['job'], job['start'], job['finish'])
                 setattr(record, k, v)
             if not job['start']:
                 record.status = STATUS_PENDING

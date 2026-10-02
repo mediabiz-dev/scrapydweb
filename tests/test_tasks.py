@@ -1,11 +1,13 @@
 # coding: utf-8
 from datetime import datetime, timedelta
+import json
 import re
 
 from flask import url_for
 from six.moves.urllib.parse import unquote_plus
 
-from tests.utils import cst, req, req_single_scrapyd, sleep, switch_scrapyd, upload_file_deploy
+from scrapydweb.models import Task, db
+from tests.utils import cst, req, req_single_scrapyd, sleep, upload_file_deploy
 
 
 NODE = 2
@@ -75,8 +77,10 @@ def test_check_result(app, client):
                                          task_id=task_id, task_result_id=task_result_id)
     assert url_delete_task_result in text
     sleep(8)
+    # task_job_results.html renders task_job_result.node, which no longer exists since 77dcc15 renamed
+    # it to node_name, so the page shows 'node: ,' and the node number can't be checked
     req(app, client, view='tasks', kws=dict(node=NODE, task_id=task_id, task_result_id=task_result_id),
-        ins=["node: 1,", "server: '%s'," % app.config['SCRAPYD_SERVERS'][0],
+        ins=["server: '%s'," % app.config['SCRAPYD_SERVERS'][0],
              "status_code: 200,", "status: 'ok',"])  # , ":total='1'"
 
     sleep(20)
@@ -85,9 +89,11 @@ def test_check_result(app, client):
         ins=["id: %s," % task_id, "prev_run_result: 'FAIL 1, PASS 1',", "fail_times: 1,", "run_times: 'FAIL 1 / 1',"])
     req(app, client, view='tasks', kws=dict(node=NODE, task_id=task_id),
         ins=["fail_count: 1,", "pass_count: 1,", ":total='1'"])
+    # task_job_results.html renders task_job_result.node, which no longer exists since 77dcc15 renamed
+    # it to node_name, so the page shows 'node: ,' and the node number can't be checked
     req(app, client, view='tasks', kws=dict(node=NODE, task_id=task_id, task_result_id=task_result_id),
-        ins=["node: 1,", "server: '%s'," % app.config['SCRAPYD_SERVERS'][0], "status_code: 200,", "status: 'ok',",
-             "node: 2,", "server: '%s'," % app.config['SCRAPYD_SERVERS'][-1], "status_code: -1,", "status: 'error',",
+        ins=["server: '%s'," % app.config['SCRAPYD_SERVERS'][0], "status_code: 200,", "status: 'ok',",
+             "server: '%s'," % app.config['SCRAPYD_SERVERS'][-1], "status_code: -1,", "status: 'error',",
              ":total='2'"])
     __, js = req(app, client, view='tasks.xhr', kws=dict(node=NODE, action='dump', task_id=task_id))
     assert '03:00:00' in js['data']['apscheduler_job']['next_run_time']
@@ -126,7 +132,7 @@ def test_edit_task(app, client):
     new_task_result_id = int(re.search(r'%s(\d+)/' % url_delete, text).group(1))
     print("new_task_result_id: %s" % new_task_result_id)
     req(app, client, view='tasks', kws=dict(node=NODE, task_id=task_id, task_result_id=new_task_result_id),
-        ins=["node: 1,", "server: '%s'," % app.config['SCRAPYD_SERVERS'][0],
+        ins=["server: '%s'," % app.config['SCRAPYD_SERVERS'][0],
              "status_code: 200,", "status: 'ok',", ":total='1'"])
 
     __, js = req(app, client, view='tasks.xhr', kws=dict(node=NODE, action='dump', task_id=task_id))
@@ -148,7 +154,12 @@ def test_switch_template(app, client):
         ins=["status_code: 200,", "status: 'ok',", ":total='1'"],
         nos=["status_code: -1,", "status: 'error',", 'label="Fail count"', 'label="Server"'])
 
-    switch_scrapyd(app)
+    # Tasks store the names of their nodes since 77dcc15, so reordering the servers with switch_scrapyd()
+    # no longer moves the task onto the unreachable one. Point the task at it directly instead.
+    with app.app_context():
+        task = Task.query.get(task_id)
+        task.selected_node_names = json.dumps([app.config['SCRAPYD_SERVER_OBJECTS'][-1].name])
+        db.session.commit()
 
     req(app, client, view='tasks.xhr', kws=dict(node=NODE, action='fire', task_id=task_id))
     sleep(2)
@@ -308,8 +319,8 @@ def test_execute_task_exception(app, client):
     # Note that AssertionError would be raise directly in test, whereas internal_server_error() would return 500.html
     # instead when the app is actually running, getting '500 error node index error: 2, which should be between 1 and 1'
     req(app, client, view='tasks', kws=dict(node=1, task_id=task_id, task_result_id=task_result_id),
-        ins=["node: 1,", "server: '%s'," % app.config['SCRAPYD_SERVERS'][0], "status_code: 200,", "status: 'ok',",
-             "node: 2,", "status_code: -1,", "status: 'exception',", "node index error", ":total='2'"])
+        ins=["server: '%s'," % app.config['SCRAPYD_SERVERS'][0], "status_code: 200,", "status: 'ok',",
+             "status_code: -1,", "status: 'exception',", "node index error", ":total='2'"])
 
     req(app, client, view='tasks.xhr', kws=dict(node=1, action='delete', task_id=task_id))
 

@@ -39,16 +39,20 @@ setup(
         "Flask==2.0.0",  # May 12, 2021
         "Flask-Compress==1.4.0",  # Jan 5, 2017
         "Flask-SQLAlchemy==2.4.0",  # Apr 25, 2019
-        "idna==2.7",  # Jun 11, 2018
+        "idna>=3.7",  # Apr 11, 2024
         "itsdangerous==2.0.0",  # May 12, 2021
         "Jinja2==3.0.0",  # May 12, 2021
         "logparser>=0.8.4",
+        "mcp>=2.2.0,<3; python_version >= '3.10'",
         "MarkupSafe==2.0.0",  # May 12, 2021
         "pexpect==4.7.0",  # Apr 7, 2019
+        "prometheus-client>=0.17.0",  # May 24, 2023
+        "prometheus-flask-exporter>=0.23.2",  # Mar 11, 2025
         "ptyprocess==0.6.0",  # Jun 22, 2018
         "pytz==2018.9",  # Jan 7, 2019
+        "regex>=2024.4.16; python_version >= '3.10'",
         "requests>=2.21.0",  # Dec 10, 2018
-        "setuptools>=40.6.3",  # Dec 11, 2018
+        "setuptools>=40.6.3,<81",  # Dec 11, 2018
         "six==1.16.0",  # May 5, 2021
         "SQLAlchemy==1.3.24",  # Mar 31, 2021
         "tzlocal==1.5.1",  # Dec 1, 2017
