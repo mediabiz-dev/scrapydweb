@@ -44,7 +44,7 @@ Done when the answer rests on evidence: quote the stats values or log lines behi
 ## Reading results
 
 - `list_jobs` and `list_timer_tasks` return a page of 100 by default. When `next_offset` isn't null there are more: narrow the call with `project`, `spider` or `status` first, and only pass `offset=next_offset` when you really need the rest. `total` is the number of matches.
-- `list_jobs` only knows what Scrapyd remembers: pending, running and recently finished jobs. `get_job_items_link` also finds older jobs, through the Jobs page history.
+- `list_jobs` returns the jobs ScrapydWeb recorded, the same as the Jobs page: finished jobs that Scrapyd no longer lists are included, along with pages, items and runtime. If a node shows up in `errors` with a failed refresh, its jobs may be out of date.
 - `auth_embedded: true` on an items or log link means it carries the node's login, which grants the whole Scrapyd API. Hand it only to the user who asked, and keep it out of commits, issues, docs and summaries.
 - `available: false` on an items link means the file isn't where the Items button of the Jobs page would point either. That name is guessed from the job's start minute and the country code in its job ID, so find the real file in the directory listing given in `notes`.
 
