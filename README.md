@@ -103,7 +103,7 @@ It requires Python >= 3.10, where the `mcp` package gets installed along with Sc
 | `deploy_project` | Packages a project in `SCRAPY_PROJECTS_DIR` on the ScrapydWeb server, like Auto packaging in the Deploy page, and adds it to all or some nodes. |
 | `list_timer_tasks` | Lists the timer tasks with their state and last run, a page at a time. |
 | `fire_timer_task` | Fires a timer task now, optionally waiting for the jobs it starts. |
-| `list_jobs` | Lists the running, pending or finished jobs of the nodes, a page at a time. |
+| `list_jobs` | Lists the running, pending or finished jobs of the nodes from the Jobs page history, a page at a time. |
 | `stop_job` | Stops a pending or running job, like the Stop and ForceStop buttons of the Jobs page, optionally waiting for it to finish. |
 | `get_job_stats` | Gets the stats of a job, like the Stats page. |
 | `search_job_log` | Searches the log of a job for a text or regex, streaming it from the node, or returns the link to the whole log, the same as the Source button. |
