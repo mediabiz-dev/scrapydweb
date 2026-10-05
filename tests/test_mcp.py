@@ -220,6 +220,7 @@ def test_list_jobs(app):
 
     result = run(app, operations.list_jobs)
     assert [error['node'] for error in result['errors']] == [2]
+    assert 'out of date' in result['errors'][0]['error']
 
     with pytest.raises(ToolError, match="status should be one of"):
         run(app, operations.list_jobs, status='fake-status')
@@ -229,28 +230,66 @@ def test_list_jobs(app):
         run(app, operations.list_jobs, offset=-1)
 
 
-def test_list_jobs_pages(app, monkeypatch):
-    listjobs = dict(
-        status='ok',
-        pending=[dict(project='p', spider='s1', id='pending1'), dict(project='p', spider='s2', id='pending2')],
-        running=[dict(project='p', spider='s1', id='running1', start_time='2026-01-01 00:00:00')],
-        finished=[dict(project='p', spider='s1', id='finished_older', start_time='2026-01-01 00:00:01'),
-                  dict(project='p', spider='s2', id='finished_s2', start_time='2026-01-01 00:00:02'),
-                  dict(project='p', spider='s1', id='finished_newer', start_time='2026-01-01 00:00:03')],
-    )
-    monkeypatch.setattr(operations, 'request_scrapyd', lambda server, path, **params: listjobs)
+def test_list_jobs_pages(app, client, monkeypatch):
+    project = 'mcp_list_jobs_project'
+    rows = [
+        dict(spider='s1', job='pending1', status='0'),
+        dict(spider='s2', job='pending2', status='0'),
+        dict(spider='s1', job='running1', status='1', pid=123, start=datetime(2026, 1, 1, 0, 0, 0)),
+        dict(spider='s1', job='finished_older', status='2', start=datetime(2026, 1, 1, 0, 0, 1),
+             finish=datetime(2026, 1, 1, 0, 1, 1), runtime='0:01:00', pages=3, items=2),
+        dict(spider='s2', job='finished_s2', status='2', start=datetime(2026, 1, 1, 0, 0, 2)),
+        dict(spider='s1', job='finished_newer', status='2', start=datetime(2026, 1, 1, 0, 0, 3)),
+        dict(spider='s1', job='finished_deleted', status='2', start=datetime(2026, 1, 1, 0, 0, 4), deleted='1'),
+        # Long gone from Scrapyd, only kept by the Jobs page
+        dict(spider='s1', job='finished_2020', status='2', start=datetime(2020, 1, 1, 0, 0, 0)),
+    ]
+    if jobs_table_map.get(1) is None:
+        req(app, client, view='jobs', kws=dict(node=1))
+    Job = jobs_table_map[1]
+    with app.app_context():
+        db.session.add_all([Job(project=project, **row) for row in rows])
+        db.session.commit()
+    monkeypatch.setattr(operations, 'refresh_jobs_table', lambda app, index: None)
 
     def page(**kwargs):
-        result = run(app, operations.list_jobs, nodes=[1], status='all', **kwargs)
+        kwargs.setdefault('status', 'all')
+        result = run(app, operations.list_jobs, nodes=[1], project=project, **kwargs)
         return result['total'], result['offset'], result['next_offset'], [job['job'] for job in result['jobs']]
 
-    assert page() == (6, 0, None, ['pending1', 'pending2', 'running1',
-                                   'finished_newer', 'finished_s2', 'finished_older'])
-    assert page(limit=4) == (6, 0, 4, ['pending1', 'pending2', 'running1', 'finished_newer'])
-    assert page(limit=4, offset=4) == (6, 4, None, ['finished_s2', 'finished_older'])
-    assert page(offset=10) == (6, 10, None, [])
-    assert page(spider='s1', limit=2) == (4, 0, 2, ['pending1', 'running1'])
-    assert page(spider='s1', limit=2, offset=2) == (4, 2, None, ['finished_newer', 'finished_older'])
+    try:
+        all_jobs = ['pending1', 'pending2', 'running1', 'finished_newer', 'finished_s2', 'finished_older',
+                    'finished_2020']
+        assert page() == (7, 0, None, all_jobs)
+        assert page(limit=4) == (7, 0, 4, all_jobs[:4])
+        assert page(limit=4, offset=4) == (7, 4, None, all_jobs[4:])
+        assert page(offset=10) == (7, 10, None, [])
+        assert page(spider='s1', limit=2) == (5, 0, 2, ['pending1', 'running1'])
+        assert page(spider='s1', limit=2, offset=2) == (5, 2, 4, ['finished_newer', 'finished_older'])
+        assert page(status='running') == (1, 0, None, ['running1'])
+        assert page(status='pending') == (2, 0, None, ['pending1', 'pending2'])
+
+        jobs = {job['job']: job for job in run(app, operations.list_jobs, nodes=[1], status='all',
+                                               project=project)['jobs']}
+        assert (jobs['pending1']['status'], jobs['pending1']['start_time']) == ('pending', None)
+        assert (jobs['running1']['status'], jobs['running1']['pid']) == ('running', 123)
+        finished = jobs['finished_older']
+        assert (finished['status'], finished['start_time'], finished['end_time']) == (
+            'finished', '2026-01-01 00:00:01', '2026-01-01 00:01:01')
+        assert (finished['runtime'], finished['pages'], finished['items']) == ('0:01:00', 3, 2)
+        assert finished['node'] == 1 and finished['update_time']
+
+        def fail(app, index):
+            raise ValueError("Scrapyd is down")
+        monkeypatch.setattr(operations, 'refresh_jobs_table', fail)
+        result = run(app, operations.list_jobs, nodes=[1], status='all', project=project)
+        assert len(result['jobs']) == 7
+        assert [error['node'] for error in result['errors']] == [1]
+        assert 'out of date' in result['errors'][0]['error'] and 'Scrapyd is down' in result['errors'][0]['error']
+    finally:
+        with app.app_context():
+            Job.query.filter_by(project=project).delete()
+            db.session.commit()
 
 
 def test_list_timer_tasks_pages(app):
