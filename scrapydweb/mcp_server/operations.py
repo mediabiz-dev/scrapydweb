@@ -308,51 +308,74 @@ def request_scrapyd(server, path, data=None, **params):
     return js
 
 
+def refresh_jobs_table(app, index):
+    # The same as the auto-reload of the Jobs page: records the jobs listed by Scrapyd, with their pages and items
+    url = get_view_url(app, 'jobs', node=index)
+    js = get_response_from_view(url, auth=web_auth(app), data={}, as_json=True)
+    if js.get('status') == 'error':
+        message = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', str(js.get('message', '')))).strip()
+        raise ValueError(clip(message, 300))
+
+
+def str_or_none(value):
+    return str(value) if value is not None else None
+
+
 def list_jobs(app, nodes=None, status='running', project=None, spider=None, limit=DEFAULT_PAGE_SIZE, offset=0):
     if status not in JOB_STATUSES + ['all']:
         raise ToolError("status should be one of: %s" % ', '.join(JOB_STATUSES + ['all']))
     check_page(limit, offset)
-    statuses = JOB_STATUSES if status == 'all' else [status]
+    status_codes = {v: k for k, v in JOB_STATUS_MAP.items()}
 
     def fetch(index, server):
+        errors = []
+        try:
+            refresh_jobs_table(app, index)
+        except Exception as err:
+            errors.append("Fail to refresh the jobs from Scrapyd, the jobs of this node may be out of date: %s: %s"
+                          % (err.__class__.__name__, err))
+        Job = jobs_table_map.get(index)
+        if Job is None:
+            return 0, [], errors + ["No jobs table for this node"]
+        db.session.rollback()  # To see the rows committed by the refresh
+        query = Job.query.filter_by(deleted='0')
+        if status != 'all':
+            query = query.filter_by(status=status_codes[status])
         if project:
-            responses = [(project, request_scrapyd(server, 'listjobs.json', project=project))]
-        else:
-            try:
-                responses = [(None, request_scrapyd(server, 'listjobs.json'))]
-            except (requests.HTTPError, ValueError):
-                projects = request_scrapyd(server, 'listprojects.json')['projects']
-                responses = [(p, request_scrapyd(server, 'listjobs.json', project=p)) for p in projects]
-        jobs = []
-        for project_, js in responses:
-            for status_ in statuses:
-                for job in js.get(status_, []):
-                    if spider and job.get('spider') != spider:
-                        continue
-                    jobs.append(OrderedDict(
-                        node=index, name=server.name, status=status_,
-                        project=job.get('project', project_), spider=job.get('spider'), job=job.get('id'),
-                        pid=job.get('pid'), start_time=job.get('start_time'), end_time=job.get('end_time'),
-                    ))
-        return jobs
+            query = query.filter_by(project=project)
+        if spider:
+            query = query.filter_by(spider=spider)
+        total = query.count()
+        # Enough rows of each node to fill the page after merging the nodes
+        records = query.order_by(Job.status.asc(), Job.start.desc(), Job.id.asc()).limit(offset + limit).all()
+        jobs = [OrderedDict(
+            node=index, name=server.name, status=JOB_STATUS_MAP.get(r.status),
+            project=r.project, spider=r.spider, job=r.job, pid=r.pid,
+            start_time=str_or_none(r.start), end_time=str_or_none(r.finish), runtime=r.runtime,
+            pages=r.pages, items=r.items, update_time=str_or_none(r.update_time)
+        ) for r in records]
+        return total, jobs, errors
 
     def fetch_or_error(index, server):
         try:
-            return fetch(index, server), None
+            total, jobs, errors = fetch(index, server)
         except Exception as err:
+            total, jobs, errors = 0, [], ['%s: %s' % (err.__class__.__name__, err)]
+        error = None
+        if errors:
             error = node_info(index, server)
-            error['error'] = '%s: %s' % (err.__class__.__name__, err)
-            return [], error
+            error['error'] = ' '.join(errors)
+        return total, jobs, error
 
     results = run_on_nodes(app, fetch_or_error, resolve_nodes(app, nodes))
-    jobs = [job for jobs_, __ in results for job in jobs_]
+    jobs = [job for __, jobs_, __ in results for job in jobs_]
     # A stable order across the pages: by status, then the latest started first, pending ones in the queue order
     jobs.sort(key=lambda job: job['start_time'] or '', reverse=True)
     jobs.sort(key=lambda job: JOB_STATUSES.index(job['status']))
     return OrderedDict(
-        **page_info(len(jobs), limit, offset),
+        **page_info(sum(total for total, __, __ in results), limit, offset),
         jobs=jobs[offset:offset + limit],
-        errors=[error for __, error in results if error],
+        errors=[error for __, __, error in results if error],
     )
 
 

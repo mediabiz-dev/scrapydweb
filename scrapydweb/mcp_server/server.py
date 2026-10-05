@@ -113,8 +113,9 @@ def create_mcp_server(app):
         limit: Limit = operations.DEFAULT_PAGE_SIZE,
         offset: Offset = 0,
     ) -> dict[str, Any]:
-        """List the jobs of the nodes as reported by Scrapyd, running ones by default,
-        with their project, spider, job ID, pid and start/end time.
+        """List the jobs of the nodes recorded by ScrapydWeb, the same as the Jobs page, running ones by default.
+        Includes the finished jobs that Scrapyd no longer lists. Each node is refreshed from Scrapyd first.
+        Returns their project, spider, job ID, pid, start/end time, runtime, pages and items.
         Returns a page of the jobs, pending first, then running and finished ones, the latest started first:
         total is the number of matching jobs, next_offset is null on the last page."""
         return run(operations.list_jobs, nodes=nodes, status=status, project=project, spider=spider,
