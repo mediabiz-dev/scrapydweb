@@ -24,4 +24,7 @@ SQLAlchemy==1.3.24
 tzlocal==1.5.1
 w3lib==2.0.0
 Werkzeug==2.0.0
-waitress
+a2wsgi>=1.10; python_version >= "3.8"
+httptools>=0.6; python_version >= "3.8"
+uvicorn>=0.30; python_version >= "3.8"
+uvloop>=0.19; python_version >= "3.8" and sys_platform != "win32"

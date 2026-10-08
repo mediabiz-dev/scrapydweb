@@ -83,6 +83,11 @@ python setup.py install
 1. Start ScrapydWeb via command `scrapydweb`. (a config file would be generated for customizing settings at the first startup.)
 2. Visit http://127.0.0.1:5000 **(It's recommended to use Google Chrome for a better experience.)**
 
+ScrapydWeb is served with [uvicorn](https://www.uvicorn.org), running the Flask app in a pool of `WSGI_THREADS` threads (128 by default).
+When a burst of requests takes all the threads, the rest wait in a queue instead of failing.
+Set `WSGI_SERVER = 'werkzeug'` in the config file to serve with the Flask development server instead, which is also used whenever `DEBUG` is True.
+It runs in a single process, since the timer tasks, the MCP server and the metrics all live in it.
+
 ### :globe_with_meridians: Browser Support
 The latest version of Google Chrome, Firefox, and Safari.
 
@@ -158,13 +163,17 @@ The other metrics are collected on each scrape:
 | `scrapydweb_timer_task_runs_total` | `task_id`, `task` | Runs of the timer task |
 | `scrapydweb_timer_task_failed_runs_total` | `task_id`, `task` | Runs of the timer task that fail to run the job on some node |
 | `scrapydweb_timer_task_last_run_timestamp_seconds` | `task_id`, `task` | When the timer task ran last time |
+| `scrapydweb_http_requests_inflight` | | HTTP requests accepted by uvicorn and not answered yet, the queued ones included |
+| `scrapydweb_http_requests_queued` | | HTTP requests waiting for a free thread to run the Flask app |
+| `scrapydweb_http_threads` | | `WSGI_THREADS`, the threads running the Flask app |
 | `scrapydweb_mcp_http_requests_total` | `status` | HTTP requests to the MCP server, including the ones rejected by its basic auth |
 | `scrapydweb_mcp_tool_calls_total` | `tool`, `status` | Calls of the MCP tool, `status` is `ok` or `error` |
 | `scrapydweb_mcp_tool_duration_seconds` | `tool` | Histogram of the calls of the MCP tool |
 
+The `scrapydweb_http_*` metrics are there only if ScrapydWeb is served with uvicorn, see `WSGI_SERVER`.
 The metrics of the MCP server are there only if `ENABLE_MCP` is True as well, and they are served at `/metrics` of ScrapydWeb too, not on `MCP_PORT`.
 
-[grafana/scrapydweb.json](grafana/scrapydweb.json) is a Grafana dashboard of these metrics: the Scrapyd nodes and their jobs, the timer tasks and their failing runs, the HTTP requests, the memory and CPU of the ScrapydWeb process, and the MCP server.
+[grafana/scrapydweb.json](grafana/scrapydweb.json) is a Grafana dashboard of these metrics: the Scrapyd nodes and their jobs, the timer tasks and their failing runs, the HTTP requests and the request queue, the memory and CPU of the ScrapydWeb process, and the MCP server.
 Import it in Grafana and pick the Prometheus data source and the scrape job of ScrapydWeb.
 
 If `ENABLE_AUTH` is True, or a reverse proxy checks basic auth, add the credentials to the scrape config:

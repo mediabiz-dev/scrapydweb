@@ -83,6 +83,11 @@ def check_app_config(config):
             assert os.path.isfile(config[k]), "%s not found: %s" % (k, config[k])
         logger.info("Running in HTTPS mode: %s, %s", config['CERTIFICATE_FILEPATH'], config['PRIVATEKEY_FILEPATH'])
 
+    WSGI_SERVER = config.setdefault('WSGI_SERVER', 'uvicorn')
+    assert WSGI_SERVER in ['uvicorn', 'werkzeug'], \
+        "WSGI_SERVER should be either 'uvicorn' or 'werkzeug'. Current value: %s" % WSGI_SERVER
+    check_assert('WSGI_THREADS', 128, int, allow_zero=False)
+
     check_mcp_config(config)
 
     _protocol = 'https' if config.get('ENABLE_HTTPS', False) else 'http'

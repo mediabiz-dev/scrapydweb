@@ -95,6 +95,15 @@ CERTIFICATE_FILEPATH = ''
 # e.g. '/home/username/cert.key'
 PRIVATEKEY_FILEPATH = ''
 
+# The default is 'uvicorn', which serves ScrapydWeb with uvicorn and runs the Flask app in a pool of
+# WSGI_THREADS threads, so that the requests beyond that wait in a queue instead of failing.
+# Set it to 'werkzeug' to serve with the Flask development server instead.
+# Note that the Flask development server is used anyway if DEBUG is True, for its interactive debugger.
+WSGI_SERVER = 'uvicorn'
+# The default is 128, the number of requests to ScrapydWeb handled at the same time.
+# Most of them only wait for the Scrapyd servers, so more threads mean more requests answered per second.
+WSGI_THREADS = 128
+
 
 ############################## Scrapy #########################################
 # ScrapydWeb is able to locate projects in the SCRAPY_PROJECTS_DIR,

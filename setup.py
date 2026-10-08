@@ -58,7 +58,11 @@ setup(
         "tzlocal==1.5.1",  # Dec 1, 2017
         "w3lib==2.0.0",  # Aug 11, 2022
         "Werkzeug==2.0.0",  # May 12, 2021
-        "waitress"
+        # The production server, see WSGI_SERVER in default_settings.py
+        "a2wsgi>=1.10; python_version >= '3.8'",
+        "httptools>=0.6; python_version >= '3.8'",
+        "uvicorn>=0.30; python_version >= '3.8'",
+        "uvloop>=0.19; python_version >= '3.8' and sys_platform != 'win32'",
     ],
     entry_points={
         "console_scripts": {

@@ -1,12 +1,14 @@
 # coding: utf-8
 from concurrent.futures import ThreadPoolExecutor
 import logging
+import threading
 
-from prometheus_client import CollectorRegistry, GCCollector, PlatformCollector, ProcessCollector
+from prometheus_client import CollectorRegistry, Gauge, GCCollector, PlatformCollector, ProcessCollector
 from prometheus_client.core import CounterMetricFamily, GaugeMetricFamily
 from prometheus_flask_exporter import PrometheusMetrics
 import requests
 from sqlalchemy import case, func
+from werkzeug.wsgi import ClosingIterator
 
 from .__version__ import __version__
 from .common import session
@@ -26,6 +28,7 @@ TASK_STATES = ['scheduled', 'paused', 'finished']
 TASK_LABELS = ['task_id', 'task']
 # For the MCP server to register its metrics as well, see scrapydweb/mcp_server/metrics.py
 REGISTRY_KEY = 'prometheus_registry'
+SERVER_METRICS_KEY = 'server_metrics'
 
 
 def init_metrics(app):
@@ -39,6 +42,60 @@ def init_metrics(app):
     registry.register(ScrapydWebCollector(app))
     app.extensions[REGISTRY_KEY] = registry
     return metrics
+
+
+def get_server_metrics(app, threads):
+    # None if init_metrics() has not been called yet
+    registry = app.extensions.get(REGISTRY_KEY)
+    if registry is None:
+        return None
+    # Only once per app, since a registry rejects the metrics registered twice
+    if SERVER_METRICS_KEY not in app.extensions:
+        app.extensions[SERVER_METRICS_KEY] = ServerMetrics(registry, threads)
+    return app.extensions[SERVER_METRICS_KEY]
+
+
+class ServerMetrics(object):
+    """The requests accepted by uvicorn, and how many of them wait for one of the threads running the Flask app"""
+
+    def __init__(self, registry, threads):
+        self.lock = threading.Lock()
+        self.inflight = 0
+        self.running = 0
+        Gauge('scrapydweb_http_requests_inflight', "HTTP requests accepted and not answered yet, the queued ones included",
+              registry=registry).set_function(lambda: self.inflight)
+        Gauge('scrapydweb_http_requests_queued', "HTTP requests waiting for a free thread to run the Flask app",
+              registry=registry).set_function(lambda: max(self.inflight - self.running, 0))
+        Gauge('scrapydweb_http_threads', "Threads running the Flask app, WSGI_THREADS",
+              registry=registry).set(threads)
+
+    def add(self, name, value):
+        with self.lock:
+            setattr(self, name, getattr(self, name) + value)
+
+    def wrap_asgi(self, asgi_app):
+        async def app(scope, receive, send):
+            if scope['type'] != 'http':
+                await asgi_app(scope, receive, send)
+                return
+            self.add('inflight', 1)
+            try:
+                await asgi_app(scope, receive, send)
+            finally:
+                self.add('inflight', -1)
+        return app
+
+    def wrap_wsgi(self, wsgi_app):
+        def app(environ, start_response):
+            self.add('running', 1)
+            try:
+                app_iter = wsgi_app(environ, start_response)
+            except BaseException:
+                self.add('running', -1)
+                raise
+            # Until the response body has been sent
+            return ClosingIterator(app_iter, lambda: self.add('running', -1))
+        return app
 
 
 def get_daemonstatus(server):

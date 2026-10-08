@@ -1831,6 +1831,117 @@
       ]
     },
     {
+      "type": "timeseries",
+      "title": "Request queue",
+      "id": 38,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "interval": "2m",
+      "description": "Requests accepted by uvicorn and not answered yet, and how many of them wait for one of the WSGI_THREADS threads running the Flask app. Only with WSGI_SERVER = 'uvicorn'.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 83
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max_over_time(scrapydweb_http_requests_queued{job=~\"$job\"}[$__interval])",
+          "interval": "2m",
+          "legendFormat": "queued",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max_over_time(scrapydweb_http_requests_inflight{job=~\"$job\"}[$__interval])",
+          "interval": "2m",
+          "legendFormat": "in flight",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max(scrapydweb_http_threads{job=~\"$job\"})",
+          "interval": "2m",
+          "legendFormat": "threads",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 20,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "threads"
+            },
+            "properties": [
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
       "type": "row",
       "title": "ScrapydWeb process",
       "id": 26,
@@ -1839,7 +1950,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 83
+        "y": 91
       },
       "panels": []
     },
@@ -1856,7 +1967,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 84
+        "y": 92
       },
       "targets": [
         {
@@ -1926,7 +2037,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 84
+        "y": 92
       },
       "targets": [
         {
@@ -1992,7 +2103,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 84
+        "y": 92
       },
       "targets": [
         {
@@ -2061,7 +2172,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 84
+        "y": 92
       },
       "targets": [
         {
@@ -2122,7 +2233,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 88
+        "y": 96
       },
       "targets": [
         {
@@ -2199,7 +2310,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 88
+        "y": 96
       },
       "targets": [
         {
@@ -2263,7 +2374,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 88
+        "y": 96
       },
       "targets": [
         {
@@ -2322,7 +2433,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 96
+        "y": 104
       },
       "panels": []
     },
@@ -2340,7 +2451,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 97
+        "y": 105
       },
       "targets": [
         {
@@ -2404,7 +2515,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 97
+        "y": 105
       },
       "targets": [
         {
@@ -2468,7 +2579,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 97
+        "y": 105
       },
       "targets": [
         {

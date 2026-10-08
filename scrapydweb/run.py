@@ -1,7 +1,6 @@
 # coding: utf-8
 import argparse
 import logging
-import waitress
 import os
 from shutil import copyfile
 import sys
@@ -21,6 +20,7 @@ logger = logging.getLogger(__name__)
 apscheduler_logger = logging.getLogger('apscheduler')
 
 STAR = '\n%s\n' % ('*' * 100)
+KEEP_ALIVE_TIMEOUT = 300
 DEFAULT_SETTINGS_PY_PATH = os.path.join(ROOT_DIR, 'default_settings.py')
 
 
@@ -121,34 +121,11 @@ def main():
           "or {protocol}://IP-OF-THE-CURRENT-HOST:{port}{star}\n".format(
            star=STAR, protocol=protocol, port=app.config['SCRAPYDWEB_PORT']))
     apscheduler_logger.setLevel(logging.DEBUG)
-    # Define optimized parameters
     if app.config.get('DEBUG', False):
         os.environ['FLASK_DEBUG'] = '1'
-        # logger.info("Waitress is already installed anc configured - Please set 'DEBUG = False' in 'scrapydweb_settings_v11.py' to serve via Waitress in production")
-
     else:
-        os.environ['FLASK_DEBUG'] = '0'  # Upstream configuration, not changed in fork.
-        # LOWEST PRIORITY TODO: Figure out why this is behaving so strangely... "in waitress: total open connections reached the connection limit, no longer accepting new connections" - Seems like it never reuses a TCP connection but not sure why
+        os.environ['FLASK_DEBUG'] = '0'
 
-        #                                  # Using Waitress as the production server
-        # backlog = 1024                   # Maximum number of incoming/waiting requests
-        # asyncore_use_poll = True         # Optimization for UNIX systems, ignores file descriptor limits
-        # expose_tracebacks = False        # Security: don’t expose tracebacks in production
-        # threads = 12                     # Balance between responsiveness and resource usage
-        # channel_timeout = 30             # Close inactive connections after 30 seconds
-        # cleanup_interval = 5             # Check for inactive connections every 5 seconds
-        # waitress.serve(
-        #     app,
-        #     listen=app.config['SCRAPYDWEB_BIND'] + ':' + str(app.config['SCRAPYDWEB_PORT']),
-        #     url_scheme=protocol,
-        #     ident='ScrapydWeb',
-        #     backlog=backlog,
-        #     asyncore_use_poll=asyncore_use_poll,
-        #     expose_tracebacks=expose_tracebacks,
-        #     channel_timeout=channel_timeout,
-        #     cleanup_interval= cleanup_interval,
-        #     threads=threads,
-        # )
     if app.config.get('ENABLE_MCP', False):
         try:
             from scrapydweb.mcp_server import start_mcp_server
@@ -156,10 +133,72 @@ def main():
         except Exception:
             logger.exception("Fail to start the MCP server, ScrapydWeb runs without it")
 
-    logger.info("Note that use_reloader is set to False in run.py")
-    logger.info("For running Flask in production, check out http://flask.pocoo.org/docs/1.0/deploying/")
-    app.run(host=app.config['SCRAPYDWEB_BIND'], port=app.config['SCRAPYDWEB_PORT'],
-            ssl_context=context, use_reloader=False)
+    serve(app, context)
+
+
+def get_wsgi_server(config):
+    wsgi_server = config.get('WSGI_SERVER', 'uvicorn')
+    if wsgi_server == 'uvicorn' and config.get('DEBUG', False):
+        logger.info("Serving with werkzeug instead of uvicorn since DEBUG is True, for its interactive debugger")
+        return 'werkzeug'
+    if wsgi_server == 'uvicorn':
+        try:
+            import a2wsgi  # noqa: F401
+            import uvicorn  # noqa: F401
+        except ImportError:
+            logger.warning("Serving with werkzeug instead of uvicorn since uvicorn or a2wsgi is not installed, "
+                           "run command: pip install uvicorn a2wsgi")
+            return 'werkzeug'
+    return wsgi_server
+
+
+def terminate_input(wsgi_app):
+    # a2wsgi ends wsgi.input with the request body but doesn't say so, and Werkzeug would otherwise
+    # read a chunked request body, the one without Content-Length, as empty
+    def app(environ, start_response):
+        environ['wsgi.input_terminated'] = True
+        return wsgi_app(environ, start_response)
+    return app
+
+
+def create_asgi_app(app):
+    from a2wsgi import WSGIMiddleware
+
+    threads = app.config.get('WSGI_THREADS', 128)
+    wsgi_app = terminate_input(app)
+    # None if ENABLE_METRICS is False
+    server_metrics = None
+    if app.config.get('ENABLE_METRICS', False):
+        from scrapydweb.metrics import get_server_metrics
+        server_metrics = get_server_metrics(app, threads)
+    if server_metrics is None:
+        return WSGIMiddleware(wsgi_app, workers=threads)
+    return server_metrics.wrap_asgi(WSGIMiddleware(server_metrics.wrap_wsgi(wsgi_app), workers=threads))
+
+
+def serve(app, ssl_context=None):
+    if get_wsgi_server(app.config) == 'werkzeug':
+        logger.info("Note that use_reloader is set to False in run.py")
+        logger.info("For running Flask in production, check out http://flask.pocoo.org/docs/1.0/deploying/")
+        app.run(host=app.config['SCRAPYDWEB_BIND'], port=app.config['SCRAPYDWEB_PORT'],
+                ssl_context=ssl_context, use_reloader=False)
+        return
+
+    import uvicorn
+
+    kwargs = {}
+    if ssl_context:
+        kwargs.update(ssl_certfile=ssl_context[0], ssl_keyfile=ssl_context[1])
+    # No limit_concurrency, so that the requests beyond WSGI_THREADS wait in the queue of the thread pool
+    # instead of getting 503.
+    # Keep idle connections open for longer than a reverse proxy reuses them, 2 minutes in Caddy,
+    # otherwise the proxy may send a request on a connection being closed and answer it with 502.
+    config = uvicorn.Config(create_asgi_app(app), host=app.config['SCRAPYDWEB_BIND'],
+                            port=app.config['SCRAPYDWEB_PORT'], log_config=None, backlog=4096,
+                            timeout_keep_alive=KEEP_ALIVE_TIMEOUT, **kwargs)
+    logger.info("Serving with uvicorn, running the Flask app in %s threads", app.config.get('WSGI_THREADS', 128))
+    uvicorn.Server(config).run()
+
 
 def load_custom_settings(config):
     path = find_scrapydweb_settings_py(SCRAPYDWEB_SETTINGS_PY, os.getcwd())
