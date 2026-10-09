@@ -69,6 +69,7 @@ window.onload = function(){
     :max-height="maxHeight"
     :size="size"
     @cell-click="handleCellClick"
+    @filter-change="handleFilterChange"
 
     highlight-current-row
     @current-change="handleSelectRow"
@@ -121,10 +122,10 @@ window.onload = function(){
     </el-table-column>
 
     <el-table-column prop="id" label="Task #" sortable align="center" width="75"></el-table-column>
-    <el-table-column prop="name" label="Name" sortable show-overflow-tooltip align="center" width="100" column_key="name" :filters="countryFilterOptions" :filter-method="countryFilter"></el-table-column>
+    <el-table-column prop="name" label="Name" sortable show-overflow-tooltip align="center" width="100" column-key="name" :filters="countryFilterOptions" :filter-method="countryFilter"></el-table-column>
     <el-table-column prop="project" label="Project" sortable show-overflow-tooltip align="center" width="150"></el-table-column>
-    <el-table-column prop="spider" label="Spider" sortable show-overflow-tooltip align="center" width="150" column_key="spider" :filters="spiderFilterOptions" :filter-method="spiderFilter"></el-table-column>
-    <el-table-column prop="selected_nodes_str" label="Nodes" sortable show-overflow-tooltip align="center" width="200" column_key="selected_nodes" :filters="nodesFilterOptions" :filter-method="nodesFilter"></el-table-column>
+    <el-table-column prop="spider" label="Spider" sortable show-overflow-tooltip align="center" width="150" column-key="spider" :filters="spiderFilterOptions" :filter-method="spiderFilter"></el-table-column>
+    <el-table-column prop="selected_nodes_str" label="Nodes" sortable show-overflow-tooltip align="center" width="200" column-key="selected_nodes" :filters="nodesFilterOptions" :filter-method="nodesFilter"></el-table-column>
     <!-- default-sort would cause background color of the buttons flash once -->
     <el-table-column prop="status" label="Status" sortable :sort-orders="sortOrders" align="center" :sort-by=['status','id'] width="85">
       <template slot-scope="scope">
@@ -163,7 +164,7 @@ window.onload = function(){
     </el-table-column>
     <!-- with jitter: 2019-01-01 00:00:01.123456+08:00 -->
     <!-- Click the DISABLED button first -->
-    <el-table-column prop="next_run_time" label="Next run time" sortable align="center" width="240"  column_key="next" :filters="hourFilterOptions" :filter-method="hoursFilter">
+    <el-table-column prop="next_run_time" label="Next run time" sortable align="center" width="240"  column-key="next" :filters="hourFilterOptions" :filter-method="hoursFilter">
       <template slot-scope="scope"><span :style="{ color: scope.row.next_run_time_color }">{{scope.row.next_run_time}}</span></template>
     </el-table-column>
     <el-table-column prop="task_results" label="Task results" sortable min-width="110" align="left" :sort-method="sortTaskResults" :sort-orders="sortOrders">
@@ -204,32 +205,13 @@ window.onload = function(){
 // note that settings_arguments comes from json.dumps() repr: \\\\t\\\\r\\\\n
 var Main = {
   data() {
-    spiders=[...new Set([
-      {% for task in tasks.items %}
-        '{{ task.spider }}',
-      {% endfor %}
-    ])].sort()
-    country_codes=[
-      {% for task in tasks.items %}
-        '{{ task.name }}',
-      {% endfor %}
-    ]
-    nodes=[...new Set([
-      {% for task in tasks.items %}
-        {{ task.selected_node_names|safe }},
-      {% endfor %}
-    ].flat())].sort()
-
-    country_codes = [...new Set(country_codes.map(x => x.split('_')[0]))].sort()
     hours=[...Array(24)].map((_, i) => i)
     return {
       size: {% if tasks.per_page > 10 %}'mini'{% else %}'—'{% endif %},  // — | medium | small | mini
       maxHeight: window.innerHeight - 200,
       currentPage: {{ tasks.page }},  // the current page number (1 indexed)
       sortOrders: ['descending','ascending',null],
-      spiderFilterOptions: spiders.map(spider => ({text:spider, value: spider})),
-      nodesFilterOptions: nodes.map(node => ({text:node, value: node})),
-      countryFilterOptions: country_codes.map(country_code => ({text:country_code, value: country_code})),
+      filteredValues: {},  // column-key: the values checked in its filter
       hourFilterOptions: hours.map(hour => ({text:String(hour).padStart(2, '0') + 'h', value: hour})),
       tableData: [
     {% for task in tasks.items %}
@@ -320,26 +302,48 @@ var Main = {
       }
     },
 
+  computed: {
+    countryFilterOptions() {
+      return this.filterOptions('name', row => [row.name.split('_')[0]]);
+    },
+    spiderFilterOptions() {
+      return this.filterOptions('spider', row => [row.spider]);
+    },
+    nodesFilterOptions() {
+      return this.filterOptions('selected_nodes', row => row.selected_nodes);
+    },
+  },
+
   methods: {
     clearFilters() {
-      this.$refs.multipleTable.clearFilter();
+      this.$refs.multipleTable.clearFilter();  // silent, emits no filter-change
+      this.filteredValues = {};
     },
-    spiderFilter(value, row, column) {
-      const property = column['property'];
-      return row[property] === value;
+    handleFilterChange(filters) {
+      this.filteredValues = Object.assign({}, this.filteredValues, filters);
     },
-    nodesFilter(value, row, column) {
-      const property = column['property'];
-      return row[property].indexOf(value) > -1;
+    // The options of a column's filter: the values of the rows that pass the filters of the other columns,
+    // plus the values checked in it, so that they can still be unchecked
+    filterOptions(columnKey, rowValues) {
+      const values = this.tableData.filter(row => this.passesOtherFilters(row, columnKey)).map(rowValues).flat();
+      return [...new Set(values.concat(this.filteredValues[columnKey] || []))].sort().map(value => ({text: value, value: value}));
     },
-    countryFilter(value, row, column) {
-      const property = column['property'];
-      return row[property].includes(value);
+    passesOtherFilters(row, columnKey) {
+      const filterMethods = {name: this.countryFilter, spider: this.spiderFilter, selected_nodes: this.nodesFilter, next: this.hoursFilter};
+      return Object.entries(this.filteredValues).every(([key, values]) =>
+        key === columnKey || !values.length || values.some(value => filterMethods[key](value, row)));
     },
-    hoursFilter(value, row, column) {
-      const property = column['property'];
-      date = new Date(row[property])
-      return value === date.getHours();
+    spiderFilter(value, row) {
+      return row.spider === value;
+    },
+    nodesFilter(value, row) {
+      return row.selected_nodes_str.indexOf(value) > -1;
+    },
+    countryFilter(value, row) {
+      return row.name.includes(value);
+    },
+    hoursFilter(value, row) {
+      return value === new Date(row.next_run_time).getHours();
     },
     handleSelectRow(val) {
       this.currentRow = val;
