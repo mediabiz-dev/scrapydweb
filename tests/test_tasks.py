@@ -380,3 +380,39 @@ def test_delete_task_or_task_result_on_the_fly(app, client):
         assert len(js['ids']) == 0
 
         req(app, client, view='tasks.xhr', kws=dict(node=1, action='delete', task_id=task_id))
+
+
+def test_query_tasks(app, client):
+    names = ['query_task_%s' % i for i in range(3)]
+    with app.app_context():
+        tasks = [Task(name=name, trigger='cron', project='query_project', version='v',
+                      spider='s1' if name != names[1] else 's2', jobid='j', settings_arguments='{}',
+                      selected_node_names='["127.0.0.1:6800"]', year='2036', month='*', day='*', week='*',
+                      day_of_week='*', hour='*', minute='*', second='0', jitter=0, coalesce='True', max_instances=1)
+                 for name in names]
+        db.session.add_all(tasks)
+        db.session.commit()
+        task_ids = [task.id for task in tasks]
+
+    def query(node=1, **args):
+        __, js = req(app, client, view='tasks.xhr', kws=dict(node=node, action='query', **args),
+                     jskws=dict(status=cst.OK), jskeys=['scheduler', 'total', 'tasks'])
+        return js['total'], [task['name'] for task in js['tasks']]
+
+    try:
+        assert query(project='query_project') == (3, names)
+        assert query(node=2, project='query_project') == (3, names)  # Timer tasks don't belong to a node
+        assert query(project='query_project', spider='s1') == (2, [names[0], names[2]])
+        assert query(name=names[1]) == (1, [names[1]])
+        assert query(name=names[1], spider='s1') == (0, [])
+        __, js = req(app, client, view='tasks.xhr', kws=dict(node=1, action='query', name=names[0]))
+        task = js['tasks'][0]
+        assert task['task_id'] == task_ids[0]
+        assert (task['project'], task['spider'], task['nodes']) == ('query_project', 's1', ['127.0.0.1:6800'])
+        assert task['state'] == 'finished'  # No apscheduler_job is added for the tasks inserted above
+        assert task['last_run'] is None
+    finally:
+        with app.app_context():
+            for task_id in task_ids:
+                db.session.delete(Task.query.get(task_id))
+            db.session.commit()
