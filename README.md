@@ -43,7 +43,7 @@
 - :battery: Enhancements
   - :package: **Auto packaging**
   - :male_detective: **Integrated with [:link: *LogParser*](https://github.com/my8100/logparser)**
-  - :alarm_clock: **Timer tasks**
+  - :alarm_clock: **Timer tasks**, also listed as JSON by `GET /1/tasks/xhr/query/?project=&spider=&name=` (all filters optional)
   - :e-mail: **Monitor & Alert**
   - :iphone: Mobile UI
   - :closed_lock_with_key: Basic auth for web UI
