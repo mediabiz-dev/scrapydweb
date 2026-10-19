@@ -5,7 +5,6 @@ from configparser import Error as ScrapyCfgParseError
 from contextlib import contextmanager
 from datetime import datetime
 import glob
-import json
 import os
 import re
 from shutil import copyfile, rmtree
@@ -21,10 +20,11 @@ import regex as regex_lib
 import requests
 from sqlalchemy import func
 
-from ..common import chunks, get_response_from_view, session
-from ..models import Task, TaskJobResult, TaskResult, db
+from ..common import get_response_from_view, session
+from ..models import TaskJobResult, TaskResult, db
 from ..servers import find_by_name, scrapyd_auth
 from ..utils.scheduler import scheduler
+from ..utils.tasks import query_timer_tasks
 from ..vars import (DEPLOY_PATH, LEGAL_NAME_PATTERN, SCHEDULER_STATE_DICT, STATE_PAUSED, STRICT_NAME_PATTERN,
                     jobs_table_map)
 from ..views.operations.deploy import get_modification_time, run_pre_deploy_hook
@@ -34,7 +34,6 @@ from ..views.operations.utils import slot
 
 SAFE_NAME_PATTERN = re.compile(r'^[\w.-]+$')
 JOB_STATUSES = ['pending', 'running', 'finished']
-CRON_FIELDS = ['year', 'month', 'day', 'week', 'day_of_week', 'hour', 'minute', 'second']
 
 JOB_STATUS_MAP = {'0': 'pending', '1': 'running', '2': 'finished'}
 
@@ -212,51 +211,9 @@ def deploy_project(app, folder=None, nodes=None, project=None, version=None):
 
 def list_timer_tasks(app, project=None, spider=None, limit=DEFAULT_PAGE_SIZE, offset=0):
     check_page(limit, offset)
-    query = Task.query
-    if project:
-        query = query.filter_by(project=project)
-    if spider:
-        query = query.filter_by(spider=spider)
-    total = query.count()
-    tasks = query.order_by(Task.id).offset(offset).limit(limit).all()
-
-    latest_ids = [i for (i, ) in db.session.query(func.max(TaskResult.id)).filter(
-        TaskResult.task_id.in_([task.id for task in tasks])).group_by(TaskResult.task_id)]
-    latest_results = {}
-    for chunk in chunks(latest_ids):
-        latest_results.update((r.task_id, r) for r in TaskResult.query.filter(TaskResult.id.in_(chunk)))
-    apscheduler_jobs = {job.id: job for job in scheduler.get_jobs(jobstore='default')}
-
-    result = []
-    for task in tasks:
-        job = apscheduler_jobs.get(str(task.id))
-        if not job:
-            state = 'finished'
-        elif job.next_run_time:
-            state = 'scheduled'
-        else:
-            state = 'paused'
-        latest = latest_results.get(task.id)
-        result.append(OrderedDict(
-            task_id=task.id,
-            name=task.name,
-            project=task.project,
-            version=task.version,
-            spider=task.spider,
-            nodes=json.loads(task.selected_node_names),
-            cron=OrderedDict((k, getattr(task, k)) for k in CRON_FIELDS),
-            timezone=task.timezone,
-            state=state,
-            next_run_time=str(job.next_run_time) if job and job.next_run_time else None,
-            last_run=OrderedDict(
-                task_result_id=latest.id,
-                execute_time=str(latest.execute_time),
-                pass_count=latest.pass_count,
-                fail_count=latest.fail_count,
-            ) if latest else None,
-        ))
+    total, tasks = query_timer_tasks(project=project, spider=spider, limit=limit, offset=offset)
     return OrderedDict(scheduler=SCHEDULER_STATE_DICT[scheduler.state], **page_info(total, limit, offset),
-                       tasks=result)
+                       tasks=tasks)
 
 
 def get_task_run(task_result_id):

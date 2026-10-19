@@ -11,6 +11,7 @@ from ..operations.schedule import ScheduleRunView
 from ...common import chunks, handle_metadata
 from ...models import Task, TaskResult, TaskJobResult, db
 from ...utils.scheduler import scheduler
+from ...utils.tasks import query_timer_tasks
 from ...vars import SCHEDULER_STATE_DICT, STATE_PAUSED, STATE_RUNNING, TIMER_TASKS_HISTORY_LOG
 from ..baseview import BaseView
 
@@ -300,7 +301,7 @@ class TasksXhrView(BaseView):
     def __init__(self):
         super(TasksXhrView, self).__init__()
 
-        self.action = self.view_args['action']  # pause|resume|remove|delete|dump|fire
+        self.action = self.view_args['action']  # pause|resume|remove|delete|dump|fire|list|query
         self.task_id = self.view_args['task_id']  # <int:task_id>
         self.task_result_id = self.view_args['task_result_id']  # <int:task_result_id>
 
@@ -339,6 +340,8 @@ class TasksXhrView(BaseView):
             self.fire_task()
         elif self.action == 'list':  # For test only
             self.list_tasks_or_results()
+        elif self.action == 'query':  # list the tasks with their details, filtered by ?project=&spider=&name=
+            self.query_task_details()
         elif self.action == 'recreate':
             self.recreate_task()
         else:  # pause|resume|remove a apscheduler_job
@@ -485,6 +488,12 @@ class TasksXhrView(BaseView):
         else:
             records = Task.query.all()
         self.js['ids'] = [i.id for i in records]
+
+    def query_task_details(self):
+        self.js['scheduler'] = SCHEDULER_STATE_DICT[self.scheduler.state]
+        self.js['total'], self.js['tasks'] = query_timer_tasks(project=request.args.get('project'),
+                                                               spider=request.args.get('spider'),
+                                                               name=request.args.get('name'))
 
     def delete_outdated_task_results(self):
         # The condition equals to: pass_count != 0 or fail_count != 0
