@@ -83,6 +83,19 @@ def test_switch_node_skip(app, client):
         ins=['2 / 2', 'onclick="switchNode(-1);', 'id="skip_nodes_checkbox"'])
 
 
+# The columns of the Timer Tasks and Jobs tables filtered by typing in their header,
+# the Vue template of the filter coming through Jinja untouched
+def test_column_filters(app, client):
+    ins = ['<span class="column-filter">{{label}}<el-popover', '{{option}}</el-checkbox>']
+    column = 'column-key="%s" :filters="[]" :render-header="renderFilterHeader"'
+    req(app, client, view='tasks', kws=dict(node=1),
+        ins=ins + [column % key for key in ['id', 'name', 'project', 'spider', 'selected_nodes']]
+        + ['mixins: [columnFiltersMixin(FILTER_COLUMNS, {next: hoursFilter})],', ':data="filteredTableData"'])
+    req(app, client, view='jobs', kws=dict(node=1, style='database'),
+        ins=ins + [column % key for key in ['project', 'spider', 'job']]
+        + ['mixins: [columnFiltersMixin(FILTER_COLUMNS)],', ':data="filteredTableData"', 'deleteRow(scope.row)'])
+
+
 # <span>Cluster Reports</span>
 # <el-tab-pane label="Get Reports" name="getreports">
 def test_cluster_reports_exists(app, client):
