@@ -109,7 +109,7 @@
     </el-table-column>
     <el-table-column prop="delete" label="Delete" sortable align="center" width="90" :sort-method="sortByIndex">
       <!-- <template slot-scope="scope"><a class="state danger" :href="scope.row.url_delete" target="_blank">Delete</a></template> -->
-      <template slot-scope="scope"><a class="state delete" @click="deleteRow(scope.$index, tableData)">Delete</a></template>
+      <template slot-scope="scope"><a class="state delete" @click="deleteRow(scope.row)">Delete</a></template>
     </el-table-column>
   </el-table>
 
@@ -234,9 +234,9 @@ var Main = {
     handleSelectRow(val) {
       this.currentRow = val;
     },
-    deleteRow(index, rows) {
-      deleteRowXHR(rows[index].url_delete);
-      rows.splice(index, 1);
+    deleteRow(row) {
+      deleteRowXHR(row.url_delete);
+      this.tableData.splice(this.tableData.indexOf(row), 1);
     },
     handleActionClick(url) {
       console.log(`url: ${url}`);
