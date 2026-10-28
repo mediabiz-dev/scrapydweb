@@ -62,7 +62,8 @@ window.onload = function(){
   <el-button @click="bulkAction('delete')">DELETE selected</el-button>
   <el-table
     ref="multipleTable"
-    :data="tableData"
+    :data="filteredTableData"
+    row-key="id"
     style="width: 100%;"
     tooltip-effect="dark"
     empty-text="There is nothing to display."
@@ -121,11 +122,11 @@ window.onload = function(){
       </template>
     </el-table-column>
 
-    <el-table-column prop="id" label="Task #" sortable align="center" width="75"></el-table-column>
-    <el-table-column prop="name" label="Name" sortable show-overflow-tooltip align="center" width="100" column-key="name" :filters="countryFilterOptions" :filter-method="countryFilter"></el-table-column>
-    <el-table-column prop="project" label="Project" sortable show-overflow-tooltip align="center" width="150"></el-table-column>
-    <el-table-column prop="spider" label="Spider" sortable show-overflow-tooltip align="center" width="150" column-key="spider" :filters="spiderFilterOptions" :filter-method="spiderFilter"></el-table-column>
-    <el-table-column prop="selected_nodes_str" label="Nodes" sortable show-overflow-tooltip align="center" width="200" column-key="selected_nodes" :filters="nodesFilterOptions" :filter-method="nodesFilter"></el-table-column>
+    <el-table-column prop="id" label="Task #" sortable align="center" width="95" column-key="id" :filters="[]" :render-header="renderFilterHeader"></el-table-column>
+    <el-table-column prop="name" label="Name" sortable show-overflow-tooltip align="center" width="100" column-key="name" :filters="[]" :render-header="renderFilterHeader"></el-table-column>
+    <el-table-column prop="project" label="Project" sortable show-overflow-tooltip align="center" width="150" column-key="project" :filters="[]" :render-header="renderFilterHeader"></el-table-column>
+    <el-table-column prop="spider" label="Spider" sortable show-overflow-tooltip align="center" width="150" column-key="spider" :filters="[]" :render-header="renderFilterHeader"></el-table-column>
+    <el-table-column prop="selected_nodes_str" label="Nodes" sortable show-overflow-tooltip align="center" width="200" column-key="selected_nodes" :filters="[]" :render-header="renderFilterHeader"></el-table-column>
     <!-- default-sort would cause background color of the buttons flash once -->
     <el-table-column prop="status" label="Status" sortable :sort-orders="sortOrders" align="center" :sort-by=['status','id'] width="85">
       <template slot-scope="scope">
@@ -200,10 +201,25 @@ window.onload = function(){
 {% endif %}
 
 
+{% include 'scrapydweb/include_column_filters.html' %}
+
 <script>
 // test name and settings_arguments:  'c:/a\r\n\u\t"\\
 // note that settings_arguments comes from json.dumps() repr: \\\\t\\\\r\\\\n
+
+// The columns filtered from their header (see columnFiltersMixin)
+const FILTER_COLUMNS = {
+  id: {listed: row => [String(row.id)]},
+  name: {listed: row => [row.name.split('_')[0]], typed: row => [row.name]},
+  project: {listed: row => [row.project]},
+  spider: {listed: row => [row.spider]},
+  selected_nodes: {listed: row => row.selected_nodes},
+};
+// The table filters the hours of the next run time itself
+const hoursFilter = (hour, row) => hour === new Date(row.next_run_time).getHours();
+
 var Main = {
+  mixins: [columnFiltersMixin(FILTER_COLUMNS, {next: hoursFilter})],
   data() {
     hours=[...Array(24)].map((_, i) => i)
     return {
@@ -211,7 +227,6 @@ var Main = {
       maxHeight: window.innerHeight - 200,
       currentPage: {{ tasks.page }},  // the current page number (1 indexed)
       sortOrders: ['descending','ascending',null],
-      filteredValues: {},  // column-key: the values checked in its filter
       hourFilterOptions: hours.map(hour => ({text:String(hour).padStart(2, '0') + 'h', value: hour})),
       tableData: [
     {% for task in tasks.items %}
@@ -302,49 +317,8 @@ var Main = {
       }
     },
 
-  computed: {
-    countryFilterOptions() {
-      return this.filterOptions('name', row => [row.name.split('_')[0]]);
-    },
-    spiderFilterOptions() {
-      return this.filterOptions('spider', row => [row.spider]);
-    },
-    nodesFilterOptions() {
-      return this.filterOptions('selected_nodes', row => row.selected_nodes);
-    },
-  },
-
   methods: {
-    clearFilters() {
-      this.$refs.multipleTable.clearFilter();  // silent, emits no filter-change
-      this.filteredValues = {};
-    },
-    handleFilterChange(filters) {
-      this.filteredValues = Object.assign({}, this.filteredValues, filters);
-    },
-    // The options of a column's filter: the values of the rows that pass the filters of the other columns,
-    // plus the values checked in it, so that they can still be unchecked
-    filterOptions(columnKey, rowValues) {
-      const values = this.tableData.filter(row => this.passesOtherFilters(row, columnKey)).map(rowValues).flat();
-      return [...new Set(values.concat(this.filteredValues[columnKey] || []))].sort().map(value => ({text: value, value: value}));
-    },
-    passesOtherFilters(row, columnKey) {
-      const filterMethods = {name: this.countryFilter, spider: this.spiderFilter, selected_nodes: this.nodesFilter, next: this.hoursFilter};
-      return Object.entries(this.filteredValues).every(([key, values]) =>
-        key === columnKey || !values.length || values.some(value => filterMethods[key](value, row)));
-    },
-    spiderFilter(value, row) {
-      return row.spider === value;
-    },
-    nodesFilter(value, row) {
-      return row.selected_nodes_str.indexOf(value) > -1;
-    },
-    countryFilter(value, row) {
-      return row.name.includes(value);
-    },
-    hoursFilter(value, row) {
-      return value === new Date(row.next_run_time).getHours();
-    },
+    hoursFilter,
     handleSelectRow(val) {
       this.currentRow = val;
     },
