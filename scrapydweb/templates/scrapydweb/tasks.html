@@ -211,7 +211,7 @@ window.onload = function(){
 // The columns filtered from their header (see columnFiltersMixin)
 const FILTER_COLUMNS = {
   task: row => [String(row.id)],
-  name: row => [row.name.split('_')[0]],
+  name: row => [row.name],
   project: row => [row.project],
   spider: row => [row.spider],
   node: row => row.selected_nodes,
