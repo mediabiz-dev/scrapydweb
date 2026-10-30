@@ -26,12 +26,12 @@
 </style>
 
 <script>
-// The header of a filtered column: typing a name or part of it narrows down the rows and the values listed,
-// checking some of the values keeps only their rows. The values, hundreds at times, are rendered only while shown.
+// The header of a filtered column: checking some of the values listed keeps only their rows,
+// typing a name or part of it narrows down the values listed. They are rendered only while shown, hundreds at times.
 Vue.component('column-filter', {
-  props: {label: String, options: Array, checked: Array, text: String, visible: Boolean},
+  props: {label: String, options: Array, checked: Array, visible: Boolean},
   data() {
-    return {query: this.text};
+    return {query: ''};
   },
   computed: {
     // The values matching the query, plus the checked ones, so that they can still be unchecked
@@ -41,38 +41,29 @@ Vue.component('column-filter', {
     },
   },
   watch: {
-    text(text) {  // cleared by the reset
-      if (!text) {
-        clearTimeout(this.timer);
+    visible(visible) {  // every time it is shown, the whole list is
+      if (!visible) {
         this.query = '';
       }
-    },
-  },
-  methods: {
-    // Waits for a pause in the typing, as the table is slow to re-render a thousand rows
-    search() {
-      clearTimeout(this.timer);
-      this.timer = setTimeout(() => this.$emit('search', this.query), 250);
     },
   },
   template: `
     <span class="column-filter">{{label}}<el-popover placement="bottom" trigger="manual" :value="visible" @after-enter="$refs.input.focus()">
       <el-input ref="input" v-model="query" size="mini" clearable placeholder="Type a name or part of it"
-        @input="search" @keyup.esc.native="$emit('close')"></el-input>
-      <el-checkbox-group v-if="options && visible" class="column-filter-options" :value="checked" @input="$emit('check', $event)">
+        @keyup.esc.native="$emit('close')"></el-input>
+      <el-checkbox-group v-if="visible" class="column-filter-options" :value="checked" @input="$emit('check', $event)">
         <el-checkbox v-for="option in shownOptions" :key="option" :label="option">{{option}}</el-checkbox>
       </el-checkbox-group>
-      <div class="column-filter-footer"><el-button type="text" size="mini" @click="$emit('reset')">reset</el-button></div>
+      <div class="column-filter-footer"><el-button type="text" size="mini" @click="query = ''; $emit('check', [])">reset</el-button></div>
       <span slot="reference" class="el-table__column-filter-trigger" @click.stop="$emit('toggle')">
-        <i :class="[visible ? 'el-icon-arrow-up' : 'el-icon-arrow-down', {'column-filter-active': checked.length || text}]"></i>
+        <i :class="[visible ? 'el-icon-arrow-up' : 'el-icon-arrow-down', {'column-filter-active': checked.length}]"></i>
       </span>
     </el-popover></span>`,
 });
 
 // Filters the tableData of the multipleTable from the headers rendered by renderFilterHeader. Their columns
 // take :filters="[]", so that only the sort carets sort them, the table adding no filter of its own.
-// filterColumns, by column-key: the values of a row listed to be checked, and those matched by typing
-// a partial value (the listed ones by default), at least one of the two.
+// filterColumns, by column-key: a function returning the values of a row listed to be checked.
 // tableFilterMethods, by column-key: the filter-method of a column filtered by the table itself,
 // whose checked values handleFilterChange keeps to narrow down the values listed in the other filters.
 function columnFiltersMixin(filterColumns, tableFilterMethods = {}) {
@@ -80,7 +71,6 @@ function columnFiltersMixin(filterColumns, tableFilterMethods = {}) {
     data() {
       return {
         filteredValues: {},  // column-key: the values checked in its filter
-        filterTexts: {},  // column-key: the text typed in its filter
         openFilter: null,  // the column-key of the filter shown
       };
     },
@@ -98,13 +88,11 @@ function columnFiltersMixin(filterColumns, tableFilterMethods = {}) {
       // plus the values checked in it, so that they can still be unchecked
       filterOptions() {
         const options = {};
-        for (const [columnKey, column] of Object.entries(filterColumns)) {
-          if (column.listed) {
-            const values = this.tableData.filter(row => this.passesFilters(row, columnKey) && this.passesTableFilters(row))
-              .map(column.listed).flat();
-            options[columnKey] = [...new Set(values.concat(this.filteredValues[columnKey] || []))]
-              .sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
-          }
+        for (const [columnKey, rowValues] of Object.entries(filterColumns)) {
+          const values = this.tableData.filter(row => this.passesFilters(row, columnKey) && this.passesTableFilters(row))
+            .map(rowValues).flat();
+          options[columnKey] = [...new Set(values.concat(this.filteredValues[columnKey] || []))]
+            .sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
         }
         return options;
       },
@@ -114,7 +102,6 @@ function columnFiltersMixin(filterColumns, tableFilterMethods = {}) {
       clearFilters() {
         this.$refs.multipleTable.clearFilter();  // silent, emits no filter-change
         this.filteredValues = {};
-        this.filterTexts = {};
         this.openFilter = null;
       },
       handleFilterChange(filters) {
@@ -127,18 +114,12 @@ function columnFiltersMixin(filterColumns, tableFilterMethods = {}) {
             label: column.label,
             options: this.filterOptions[columnKey],
             checked: this.filteredValues[columnKey] || [],
-            text: this.filterTexts[columnKey] || '',
             visible: this.openFilter === columnKey,
           },
           on: {
             toggle: () => { this.openFilter = this.openFilter === columnKey ? null : columnKey; },
             close: () => { this.openFilter = null; },
-            search: text => { this.filterTexts = Object.assign({}, this.filterTexts, {[columnKey]: text}); },
             check: values => { this.filteredValues = Object.assign({}, this.filteredValues, {[columnKey]: values}); },
-            reset: () => {
-              this.filterTexts = Object.assign({}, this.filterTexts, {[columnKey]: ''});
-              this.filteredValues = Object.assign({}, this.filteredValues, {[columnKey]: []});
-            },
           },
         });
       },
@@ -148,11 +129,8 @@ function columnFiltersMixin(filterColumns, tableFilterMethods = {}) {
           columnKey === exceptColumnKey || this.passesFilter(row, columnKey));
       },
       passesFilter(row, columnKey) {
-        const column = filterColumns[columnKey];
         const checked = this.filteredValues[columnKey] || [];
-        const text = (this.filterTexts[columnKey] || '').trim().toLowerCase();
-        return (!checked.length || column.listed(row).some(value => checked.includes(value)))
-          && (!text || (column.typed || column.listed)(row).some(value => value.toLowerCase().includes(text)));
+        return !checked.length || filterColumns[columnKey](row).some(value => checked.includes(value));
       },
       passesTableFilters(row) {
         return Object.entries(tableFilterMethods).every(([columnKey, filterMethod]) => {

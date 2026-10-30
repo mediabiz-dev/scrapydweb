@@ -152,9 +152,9 @@ setTimeout("if(loading == false){window.location.reload(true);}else{console.log(
 
 // The columns filtered from their header (see columnFiltersMixin)
 const FILTER_COLUMNS = {
-  project: {listed: row => [row.project]},
-  spider: {listed: row => [row.spider]},
-  job: {listed: row => row.job.split('_').slice(1, 2), typed: row => [row.job]},
+  project: row => [row.project],
+  spider: row => [row.spider],
+  job: row => row.job.split('_').slice(1, 2),
 };
 
 var Main = {

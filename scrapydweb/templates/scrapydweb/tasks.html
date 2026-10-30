@@ -209,11 +209,11 @@ window.onload = function(){
 
 // The columns filtered from their header (see columnFiltersMixin)
 const FILTER_COLUMNS = {
-  id: {listed: row => [String(row.id)]},
-  name: {listed: row => [row.name.split('_')[0]], typed: row => [row.name]},
-  project: {listed: row => [row.project]},
-  spider: {listed: row => [row.spider]},
-  selected_nodes: {listed: row => row.selected_nodes},
+  id: row => [String(row.id)],
+  name: row => [row.name.split('_')[0]],
+  project: row => [row.project],
+  spider: row => [row.spider],
+  selected_nodes: row => row.selected_nodes,
 };
 // The table filters the hours of the next run time itself
 const hoursFilter = (hour, row) => hour === new Date(row.next_run_time).getHours();
