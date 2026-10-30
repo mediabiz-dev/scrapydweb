@@ -84,16 +84,16 @@ def test_switch_node_skip(app, client):
 
 
 # The columns of the Timer Tasks and Jobs tables filtered from their header,
-# the Vue template of the filter coming through Jinja untouched
+# the Vue template of the filter coming through Jinja untouched.
+# The values checked are kept in the query of the URL by column-key, the views ignoring them.
 def test_column_filters(app, client):
-    ins = ['<span class="column-filter">{{label}}<el-popover', '{{option}}</el-checkbox>']
+    ins = ['<span class="column-filter">{{label}}<el-popover', '{{option}}</el-checkbox>',
+           'mixins: [columnFiltersMixin(FILTER_COLUMNS)],', ':data="filteredTableData"']
     column = 'column-key="%s" :filters="[]" :render-header="renderFilterHeader"'
-    req(app, client, view='tasks', kws=dict(node=1),
-        ins=ins + [column % key for key in ['id', 'name', 'project', 'spider', 'selected_nodes']]
-        + ['mixins: [columnFiltersMixin(FILTER_COLUMNS, {next: hoursFilter})],', ':data="filteredTableData"'])
-    req(app, client, view='jobs', kws=dict(node=1, style='database'),
-        ins=ins + [column % key for key in ['project', 'spider', 'job']]
-        + ['mixins: [columnFiltersMixin(FILTER_COLUMNS)],', ':data="filteredTableData"', 'deleteRow(scope.row)'])
+    req(app, client, view='tasks', kws=dict(node=1, spider='s', hour='09h'),
+        ins=ins + [column % key for key in ['task', 'name', 'project', 'spider', 'node', 'hour']])
+    req(app, client, view='jobs', kws=dict(node=1, style='database', spider='s', job='j'),
+        ins=ins + [column % key for key in ['project', 'spider', 'job', 'start', 'finish']] + ['deleteRow(scope.row)'])
 
 
 # <span>Cluster Reports</span>
