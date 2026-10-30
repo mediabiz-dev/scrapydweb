@@ -42,6 +42,21 @@
     padding-right: 4px;
   }
   .el-table {margin-bottom: 5px;}
+
+  .dropdown-content-wrap {flex-direction: column;}
+  .dropdown-content {min-height: 0;}  /* scrolls below the search */
+  .dropdown-search {
+    flex-shrink: 0;
+    height: 28px;
+    margin: 8px 16px 4px;
+    padding: 0 8px;
+    border: 1px solid #dcdfe6;
+    border-radius: 4px;
+    outline: none;
+  }
+  .dropdown-search:focus {border-color: #409EFF;}
+  /* Stays open while typing in the search, the mouse having left it */
+  .dropdown:focus-within .dropdown-content-wrap {display: flex;}
   </style>
 
   <script type="text/javascript" src="{{ static_js_jquery_min }}"></script>
@@ -68,13 +83,17 @@
       </svg>
     </a>
     <div class="dropdown-content-wrap">
+      {% if SCRAPYD_SERVERS_AMOUNT > 1 %}
+      <input class="dropdown-search" type="search" placeholder="Type a name or part of it"
+        oninput="filterNodes(this.value);" onkeydown="if (event.key == 'Enter') goToFirstNode();">
+      {% endif %}
       <div class="dropdown-content">
       {% for server in SCRAPYD_SERVER_OBJECTS %}
         {% if server.group and loop.changed(server.group) %}
-        <div> --- {{ server.group }} --- </div>
+        <div class="dropdown-group" data-group="{{ server.group }}"> --- {{ server.group }} --- </div>
         {% endif %}
 
-        <a href="{{ g.url_jobs_list[loop.index0] }}"
+        <a href="{{ g.url_jobs_list[loop.index0] }}" data-group="{{ server.group or '' }}"
 
         {% if loop.index == node %}
         style="color: #409EFF; font-weight: 700;"
@@ -415,6 +434,31 @@ function switchNode(change) {
 
   location.href = location.pathname.replace(/\/\d+/, '/'+target) + location.search;
   showLoader();
+}
+
+
+// Narrows down the nodes listed in the dropdown to those whose name, address or group contain the text typed
+function filterNodes(query) {
+  query = query.trim().toLowerCase();
+  var links = Array.from(document.querySelectorAll('.dropdown-content a'));
+  links.forEach(function (a) {
+    a.style.display = (a.textContent + ' ' + a.dataset.group).toLowerCase().includes(query) ? '' : 'none';
+  });
+  document.querySelectorAll('.dropdown-content .dropdown-group').forEach(function (div) {
+    div.style.display = links.some(function (a) {
+      return a.dataset.group == div.dataset.group && a.style.display == '';
+    }) ? '' : 'none';
+  });
+}
+
+function goToFirstNode() {
+  var link = Array.from(document.querySelectorAll('.dropdown-content a')).find(function (a) {
+    return a.style.display == '';
+  });
+  if (link) {
+    showLoader();
+    location.href = link.href;
+  }
 }
 
 
