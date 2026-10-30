@@ -91,10 +91,10 @@
       </template>
     </el-table-column>
 
-    <el-table-column prop="start" label="Start" sortable :sort-method="sortStart" :sort-orders="sortOrders" align="center" width="145"></el-table-column>
+    <el-table-column prop="start" label="Start" sortable :sort-method="sortStart" :sort-orders="sortOrders" align="center" width="145" column-key="start" :filters="[]" :render-header="renderFilterHeader"></el-table-column>
     <!-- 16 days, 20:09:24 -->
     <el-table-column prop="runtime" label="Runtime" sortable :sort-method="sortRuntime" :sort-orders="sortOrders" align="center" width="125"></el-table-column>
-    <el-table-column prop="finish" label="Finish" sortable :sort-orders="sortOrders" align="center" width="145"></el-table-column>
+    <el-table-column prop="finish" label="Finish" sortable :sort-orders="sortOrders" align="center" width="145" column-key="finish" :filters="[]" :render-header="renderFilterHeader"></el-table-column>
     <el-table-column prop="update_time" label="Update time" sortable :sort-orders="sortOrders" align="center" width="145"></el-table-column>
     <el-table-column prop="pid" label="PID" sortable :sort-method="sortPID" :sort-orders="sortOrders" align="center" width="70">
       <template slot-scope="scope"><span :style="{ color: scope.row.pid_color }">{{scope.row.pid}}</span></template>
@@ -151,10 +151,13 @@ setTimeout("if(loading == false){window.location.reload(true);}else{console.log(
 // runtime: '16 days, 20:09:24'
 
 // The columns filtered from their header (see columnFiltersMixin)
+const hourOf = time => time ? [time.slice(0, 13) + 'h'] : [];  // '2019-01-01 00h', none if not yet
 const FILTER_COLUMNS = {
   project: row => [row.project],
   spider: row => [row.spider],
   job: row => row.job.split('_').slice(1, 2),
+  start: row => hourOf(row.start),
+  finish: row => hourOf(row.finish),
 };
 
 var Main = {
