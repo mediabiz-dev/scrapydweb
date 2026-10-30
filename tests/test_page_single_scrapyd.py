@@ -76,7 +76,7 @@ def test_items(app, client):
 
 def test_switch_node_skip(app, client):
     req_single_scrapyd(app, client, view='jobs', kws=dict(node=1),
-                       nos=['onclick="switchNode', 'id="skip_nodes_checkbox"'])
+                       nos=['onclick="switchNode', 'id="skip_nodes_checkbox"', 'oninput="filterNodes'])
 
 
 # <span>Cluster Reports</span>

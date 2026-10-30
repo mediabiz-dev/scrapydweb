@@ -78,12 +78,12 @@ def test_items(app, client):
 
 def test_switch_node_skip(app, client):
     req(app, client, view='servers', kws=dict(node=1),
-        ins=['1 / 2', 'onclick="switchNode(1);', 'id="skip_nodes_checkbox"'])
+        ins=['1 / 2', 'onclick="switchNode(1);', 'id="skip_nodes_checkbox"', 'oninput="filterNodes(this.value);"'])
     req(app, client, view='servers', kws=dict(node=2),
-        ins=['2 / 2', 'onclick="switchNode(-1);', 'id="skip_nodes_checkbox"'])
+        ins=['2 / 2', 'onclick="switchNode(-1);', 'id="skip_nodes_checkbox"', 'oninput="filterNodes(this.value);"'])
 
 
-# The columns of the Timer Tasks and Jobs tables filtered by typing in their header,
+# The columns of the Timer Tasks and Jobs tables filtered from their header,
 # the Vue template of the filter coming through Jinja untouched
 def test_column_filters(app, client):
     ins = ['<span class="column-filter">{{label}}<el-popover', '{{option}}</el-checkbox>']
