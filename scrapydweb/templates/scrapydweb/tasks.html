@@ -28,8 +28,10 @@
 <script>
 window.onload = function(){
   if (location.search.indexOf('flash=') != -1) {
-    var timestamp = Math.floor(Date.now() / 1000);
-    history.pushState(null, '', [location.protocol, '//', location.host, location.pathname, '?t=', timestamp].join(''));
+    var query = new URLSearchParams(location.search);  // the filters of the table among others
+    query.delete('flash');
+    query.set('t', Math.floor(Date.now() / 1000));
+    history.pushState(null, '', location.pathname + '?' + query);
   }
 };
 </script>
@@ -70,7 +72,6 @@ window.onload = function(){
     :max-height="maxHeight"
     :size="size"
     @cell-click="handleCellClick"
-    @filter-change="handleFilterChange"
 
     highlight-current-row
     @current-change="handleSelectRow"
@@ -122,11 +123,11 @@ window.onload = function(){
       </template>
     </el-table-column>
 
-    <el-table-column prop="id" label="Task #" sortable align="center" width="95" column-key="id" :filters="[]" :render-header="renderFilterHeader"></el-table-column>
+    <el-table-column prop="id" label="Task #" sortable align="center" width="95" column-key="task" :filters="[]" :render-header="renderFilterHeader"></el-table-column>
     <el-table-column prop="name" label="Name" sortable show-overflow-tooltip align="center" width="100" column-key="name" :filters="[]" :render-header="renderFilterHeader"></el-table-column>
     <el-table-column prop="project" label="Project" sortable show-overflow-tooltip align="center" width="150" column-key="project" :filters="[]" :render-header="renderFilterHeader"></el-table-column>
     <el-table-column prop="spider" label="Spider" sortable show-overflow-tooltip align="center" width="150" column-key="spider" :filters="[]" :render-header="renderFilterHeader"></el-table-column>
-    <el-table-column prop="selected_nodes_str" label="Nodes" sortable show-overflow-tooltip align="center" width="200" column-key="selected_nodes" :filters="[]" :render-header="renderFilterHeader"></el-table-column>
+    <el-table-column prop="selected_nodes_str" label="Nodes" sortable show-overflow-tooltip align="center" width="200" column-key="node" :filters="[]" :render-header="renderFilterHeader"></el-table-column>
     <!-- default-sort would cause background color of the buttons flash once -->
     <el-table-column prop="status" label="Status" sortable :sort-orders="sortOrders" align="center" :sort-by=['status','id'] width="85">
       <template slot-scope="scope">
@@ -165,7 +166,7 @@ window.onload = function(){
     </el-table-column>
     <!-- with jitter: 2019-01-01 00:00:01.123456+08:00 -->
     <!-- Click the DISABLED button first -->
-    <el-table-column prop="next_run_time" label="Next run time" sortable align="center" width="240"  column-key="next" :filters="hourFilterOptions" :filter-method="hoursFilter">
+    <el-table-column prop="next_run_time" label="Next run time" sortable align="center" width="240"  column-key="hour" :filters="[]" :render-header="renderFilterHeader">
       <template slot-scope="scope"><span :style="{ color: scope.row.next_run_time_color }">{{scope.row.next_run_time}}</span></template>
     </el-table-column>
     <el-table-column prop="task_results" label="Task results" sortable min-width="110" align="left" :sort-method="sortTaskResults" :sort-orders="sortOrders">
@@ -209,25 +210,25 @@ window.onload = function(){
 
 // The columns filtered from their header (see columnFiltersMixin)
 const FILTER_COLUMNS = {
-  id: row => [String(row.id)],
+  task: row => [String(row.id)],
   name: row => [row.name.split('_')[0]],
   project: row => [row.project],
   spider: row => [row.spider],
-  selected_nodes: row => row.selected_nodes,
+  node: row => row.selected_nodes,
+  hour: row => {  // of the next run time, none if N/A
+    const hour = new Date(row.next_run_time).getHours();
+    return isNaN(hour) ? [] : [String(hour).padStart(2, '0') + 'h'];
+  },
 };
-// The table filters the hours of the next run time itself
-const hoursFilter = (hour, row) => hour === new Date(row.next_run_time).getHours();
 
 var Main = {
-  mixins: [columnFiltersMixin(FILTER_COLUMNS, {next: hoursFilter})],
+  mixins: [columnFiltersMixin(FILTER_COLUMNS)],
   data() {
-    hours=[...Array(24)].map((_, i) => i)
     return {
       size: {% if tasks.per_page > 10 %}'mini'{% else %}'—'{% endif %},  // — | medium | small | mini
       maxHeight: window.innerHeight - 200,
       currentPage: {{ tasks.page }},  // the current page number (1 indexed)
       sortOrders: ['descending','ascending',null],
-      hourFilterOptions: hours.map(hour => ({text:String(hour).padStart(2, '0') + 'h', value: hour})),
       tableData: [
     {% for task in tasks.items %}
       {
@@ -318,7 +319,6 @@ var Main = {
     },
 
   methods: {
-    hoursFilter,
     handleSelectRow(val) {
       this.currentRow = val;
     },
@@ -341,8 +341,7 @@ var Main = {
           location.href = url;  // 'Finished' button in the 'Status' column
         } else {
           if (url.indexOf('/tasks/xhr/fire/') != -1) {
-            var timestamp = Math.floor(Date.now() / 1000);
-            history.pushState(null, '', [location.protocol, '//', location.host, location.pathname, '?t=', timestamp].join(''));
+            history.pushState(null, '', this.urlWith({t: Math.floor(Date.now() / 1000)}));
           }
           taskXHR(url);
         }
@@ -350,12 +349,11 @@ var Main = {
     },
     handleSizeChange(val) {
       console.log(`per_page: ${val}`);
-      location.href = '.?per_page=' + val;
-      // location.href = `.?per_page=${val}&page=1`;
+      location.href = this.urlWith({per_page: val, page: null});
     },
     handleCurrentChange(val) {
       console.log(`page: ${val}`);
-      location.href = '.?page=' + val;
+      location.href = this.urlWith({page: val});
     },
     handleCellClick(row, column, cell, event) {
       // console.log(row, column, cell, event);

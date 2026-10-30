@@ -236,12 +236,12 @@ var Main = {
     handleCurrentChange(val) {
       console.log(val);
       showLoader();
-      location.href = '.?page=' + val;
+      location.href = this.urlWith({page: val});
     },
     handleSizeChange(val) {
       console.log(`perpage ${val}`);
       showLoader();
-      location.href = '.?per_page=' + val;
+      location.href = this.urlWith({per_page: val, page: null});
     },
     sortJobWithTask(a, b) {
       var a_task_re = a.job.match(/task_(\d+)_(.+)/);

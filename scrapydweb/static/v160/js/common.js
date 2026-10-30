@@ -296,12 +296,16 @@ function taskXHR(url){
                     // For the fire action: "url_jump": "/1/tasks/2/"
                     if (obj.url_jump) {
                         var location_pathname = obj.url_jump;
+                        var query = new URLSearchParams();
                     } else {
                         var location_pathname = location.pathname;
+                        var query = new URLSearchParams(location.search);  // the filters of the table among others
+                        query.delete('t');
                     }
+                    query.set('flash', obj.tip);
                     try {
                         // throw 'testing';
-                        location.href = [location.protocol, '//', location.host, location_pathname, '?flash=', obj.tip.replace(/#/g, '%23')].join('');
+                        location.href = [location.protocol, '//', location.host, location_pathname, '?', query].join('');
                         return;
                     } catch(err) {
                         console.log(err);

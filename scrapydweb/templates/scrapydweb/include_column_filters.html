@@ -61,16 +61,23 @@ Vue.component('column-filter', {
     </el-popover></span>`,
 });
 
-// Filters the tableData of the multipleTable from the headers rendered by renderFilterHeader. Their columns
-// take :filters="[]", so that only the sort carets sort them, the table adding no filter of its own.
+// Filters the tableData from the headers rendered by renderFilterHeader. Their columns take :filters="[]",
+// so that only the sort carets sort them, the table adding no filter of its own.
 // filterColumns, by column-key: a function returning the values of a row listed to be checked.
-// tableFilterMethods, by column-key: the filter-method of a column filtered by the table itself,
-// whose checked values handleFilterChange keeps to narrow down the values listed in the other filters.
-function columnFiltersMixin(filterColumns, tableFilterMethods = {}) {
+// The values checked are kept in the query of the URL, by column-key, so that they stay checked
+// in the other pages of the table (see urlWith) and after a reload.
+function columnFiltersMixin(filterColumns) {
   return {
     data() {
+      const query = new URLSearchParams(location.search);
+      const filteredValues = {};  // column-key: the values checked in its filter
+      for (const columnKey of Object.keys(filterColumns)) {
+        if (query.getAll(columnKey).length) {
+          filteredValues[columnKey] = query.getAll(columnKey);
+        }
+      }
       return {
-        filteredValues: {},  // column-key: the values checked in its filter
+        filteredValues: filteredValues,
         openFilter: null,  // the column-key of the filter shown
       };
     },
@@ -78,6 +85,17 @@ function columnFiltersMixin(filterColumns, tableFilterMethods = {}) {
     mounted() {
       // A click outside of the filter shown closes it, the clicks inside its popover don't reach the document
       document.addEventListener('click', () => { this.openFilter = null; });
+    },
+
+    watch: {
+      filteredValues(filteredValues) {
+        const query = new URLSearchParams(location.search);
+        for (const columnKey of Object.keys(filterColumns)) {
+          query.delete(columnKey);
+          (filteredValues[columnKey] || []).forEach(value => query.append(columnKey, value));
+        }
+        history.replaceState(history.state, '', location.pathname + (String(query) ? '?' + query : ''));
+      },
     },
 
     computed: {
@@ -89,8 +107,7 @@ function columnFiltersMixin(filterColumns, tableFilterMethods = {}) {
       filterOptions() {
         const options = {};
         for (const [columnKey, rowValues] of Object.entries(filterColumns)) {
-          const values = this.tableData.filter(row => this.passesFilters(row, columnKey) && this.passesTableFilters(row))
-            .map(rowValues).flat();
+          const values = this.tableData.filter(row => this.passesFilters(row, columnKey)).map(rowValues).flat();
           options[columnKey] = [...new Set(values.concat(this.filteredValues[columnKey] || []))]
             .sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
         }
@@ -100,12 +117,16 @@ function columnFiltersMixin(filterColumns, tableFilterMethods = {}) {
 
     methods: {
       clearFilters() {
-        this.$refs.multipleTable.clearFilter();  // silent, emits no filter-change
         this.filteredValues = {};
         this.openFilter = null;
       },
-      handleFilterChange(filters) {
-        this.filteredValues = Object.assign({}, this.filteredValues, filters);
+      // The URL of this page with the query params given set, or deleted if null, keeping the others
+      urlWith(params) {
+        const query = new URLSearchParams(location.search);
+        for (const [key, value] of Object.entries(params)) {
+          value === null ? query.delete(key) : query.set(key, value);
+        }
+        return location.pathname + '?' + query;
       },
       renderFilterHeader(h, {column}) {
         const columnKey = column.columnKey;
@@ -131,12 +152,6 @@ function columnFiltersMixin(filterColumns, tableFilterMethods = {}) {
       passesFilter(row, columnKey) {
         const checked = this.filteredValues[columnKey] || [];
         return !checked.length || filterColumns[columnKey](row).some(value => checked.includes(value));
-      },
-      passesTableFilters(row) {
-        return Object.entries(tableFilterMethods).every(([columnKey, filterMethod]) => {
-          const checked = this.filteredValues[columnKey] || [];
-          return !checked.length || checked.some(value => filterMethod(value, row));
-        });
       },
     },
   };
